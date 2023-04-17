@@ -130,8 +130,8 @@ type
     procedure OnProcessSet(const Value: TAwEvent);
     function OnStartGet: TAwEvent;
     procedure OnStartSet(const Value: TAwEvent);
-    function OnDestryoingGet: TAwEvent;
-    procedure OnDestryoingSet(const Value: TAwEvent);
+    function OnDestroyingGet: TAwEvent;
+    procedure OnDestroyingSet(const Value: TAwEvent);
     function OnFinishLastGet: TAwEvent;
     procedure OnFinishLastSet(const Value: TAwEvent);
     function OnStartFerstGet: TAwEvent;
@@ -183,7 +183,7 @@ type
     property OnStartFerst: TAwEvent read OnStartFerstGet write OnStartFerstSet;
     property OnFinishLast: TAwEvent read OnFinishLastGet write OnFinishLastSet;
     property OnProcess: TAwEvent read OnProcessGet write OnProcessSet;
-    property OnDestryoing: TAwEvent read OnDestryoingGet write OnDestryoingSet;
+    property OnDestroying: TAwEvent read OnDestroyingGet write OnDestroyingSet;
   end;
 {$ENDREGION}
   /// TAwLocExecutor базовый локальный исполнитель анимации  для внутреннего использования
@@ -395,8 +395,8 @@ type
     procedure OnProcessSet(const Value: TAwEvent);
     function OnStartGet: TAwEvent;
     procedure OnStartSet(const Value: TAwEvent);
-    function OnDestryoingGet: TAwEvent;
-    procedure OnDestryoingSet(const Value: TAwEvent);
+    function OnDestroyingGet: TAwEvent;
+    procedure OnDestroyingSet(const Value: TAwEvent);
     function AsObjectGet: TAwAnimateBase;
 
     procedure CheckBar;
@@ -463,7 +463,7 @@ type
     property OnStartFerst: TAwEvent read OnStartFerstGet write OnStartFerstSet;
     property OnFinishLast: TAwEvent read OnFinishLastGet write OnFinishLastSet;
     property OnProcess: TAwEvent read OnProcessGet write OnProcessSet;
-    property OnDestryoing: TAwEvent read OnDestryoingGet write OnDestryoingSet;
+    property OnDestroying: TAwEvent read OnDestroyingGet write OnDestroyingSet;
   end;
 {$ENDREGION}
 
@@ -2316,12 +2316,12 @@ begin
   FName := Value;
 end;
 
-function TAwLocExecutor.OnDestryoingGet: TAwEvent;
+function TAwLocExecutor.OnDestroyingGet: TAwEvent;
 begin
   Result := FOnDestryoing;
 end;
 
-procedure TAwLocExecutor.OnDestryoingSet(const Value: TAwEvent);
+procedure TAwLocExecutor.OnDestroyingSet(const Value: TAwEvent);
 begin
   FOnDestryoing := Value;
 end;
