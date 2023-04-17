@@ -5,6 +5,10 @@
 
   var Shake:IAwAnimateShake;
   begin
+  
+    //отмена предыдущих анимаций для этого контрола
+   AwFactoryEffects.SourceCancel(TAwSourceSimple.Create(AmComboBox1));
+   
    Shake:= AwFactoryEffects.Shake;
    Shake.OnDestroying:=  AntDestroy;
    // быстрая установка параметров
