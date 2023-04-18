@@ -4,7 +4,9 @@ interface
 
 uses
   System.SysUtils,
-  System.Types;
+  System.Types,
+  System.Generics.Collections,
+  AmAnimate.Res;
 
 type
 
@@ -51,10 +53,12 @@ type
 
   // класс помоши для рассылки событий  TAwProc  procedure of object;
   // можете любое что то свое использовать
-  TAwHandleBroadcast = class
+  TAwHandleBroadcastDestroy = class
   strict private
     FArr: TArray<TAwProc>;
     FCount: Integer;
+    FFlagChangedArr:integer;
+    FFlagInvokeLock:integer;
     function Capacity: Integer;
     procedure Grow;
     procedure CheckGrow;
@@ -72,50 +76,97 @@ implementation
 
 { TAwHandleBroadcast }
 
-constructor TAwHandleBroadcast.Create;
+constructor TAwHandleBroadcastDestroy.Create;
 begin
   inherited;
   FCount := 0;
   FArr := nil;
+  FFlagChangedArr:=0;
+  FFlagInvokeLock:=0;
 end;
 
-destructor TAwHandleBroadcast.Destroy;
+destructor TAwHandleBroadcastDestroy.Destroy;
 begin
   FArr := nil;
   FCount := 0;
   inherited;
 end;
 
-function TAwHandleBroadcast.Capacity: Integer;
+function TAwHandleBroadcastDestroy.Capacity: Integer;
 begin
   Result := Length(FArr);
 end;
 
-procedure TAwHandleBroadcast.CheckGrow;
+procedure TAwHandleBroadcastDestroy.CheckGrow;
 begin
   if FCount >= Capacity then
     Grow;
 end;
 
-procedure TAwHandleBroadcast.Grow;
+procedure TAwHandleBroadcastDestroy.Grow;
 begin
   Setlength(FArr, Capacity + 20);
 end;
 
-procedure TAwHandleBroadcast.Invoke;
+procedure TAwHandleBroadcastDestroy.Invoke;
 var
   i: Integer;
-  A: TArray<TAwProc>;
+  Map:TDictionary<TAwProc,Boolean>;
+  Proc:TAwProc;
+  IsBreaker:boolean;
 begin
   if FCount <= 0 then
     exit;
-  Setlength(A, FCount);
-  Move(FArr[0], A[0], Sizeof(TAwProc) * FCount);
-  for i := Length(A) - 1 downto 0 do
-    A[i]();
+   // Setlength(A, FCount);
+   // Move(FArr[0], A[0], Sizeof(TAwProc) * FCount);
+   // for i := Length(A) - 1 downto 0 do
+   //   A[i]();
+   // во время выпонения   A[i]();
+   // FArr может поменятся сколько угодно раз как и добавление так и удаление
+   // поэтому после каждого вызова нужно заново обращатся к FArr и проходить по списку
+   // пока не пройдем все процедуры
+   // т.к этот объект используется только для события удаления
+   // то в момент вызова Invoke   Sub не может быть вызван
+   // на  Sub кинем исключение а UnSub может вызыватся сколько угодно раз
+   // в вызваном Invoke
+
+   if FFlagInvokeLock <> 0 then
+   raise Exception.CreateResFmt(@RsTAwHandleBroadcast_Invoke,[]);
+   inc(FFlagInvokeLock);
+   try
+       FFlagChangedArr:=0;
+       IsBreaker:= false;
+       Map:=TDictionary<TAwProc,Boolean>.Create;
+       try
+          while (FCount > 0) and  not IsBreaker do
+          begin
+            IsBreaker:=true;
+            for I := 0 to FCount - 1 do
+             if Map.TryAdd(FArr[i],false) then
+             begin
+              Proc:= FArr[i];
+              Proc();
+              if FFlagChangedArr <> 0 then
+              begin
+                FFlagChangedArr:=0;
+                IsBreaker:=false;
+                break;
+              end;
+             end;
+          end;
+       finally
+         FFlagChangedArr:=0;
+         Map.Free;
+       end;
+   finally
+     dec(FFlagInvokeLock);
+   end;
+
+
+
 end;
 
-function TAwHandleBroadcast.IndexOf(const Event: TAwProc): Integer;
+function TAwHandleBroadcastDestroy.IndexOf(const Event: TAwProc): Integer;
 begin
   for Result := FCount - 1 downto 0 do
     if TMethod(Event) = TMethod(FArr[Result]) then
@@ -123,17 +174,20 @@ begin
   Result := -1;
 end;
 
-procedure TAwHandleBroadcast.Sub(Event: TAwProc);
+procedure TAwHandleBroadcastDestroy.Sub(Event: TAwProc);
 begin
   if (TMethod(Event).Code = nil) or (TMethod(Event).Data = nil) or
     (IndexOf(Event) >= 0) then
     exit;
+  if FFlagInvokeLock <> 0 then
+  raise Exception.CreateResFmt(@RsTAwHandleBroadcast_Sub,[]);
   CheckGrow;
+  inc(FFlagChangedArr);
   FArr[FCount] := Event;
   inc(FCount);
 end;
 
-procedure TAwHandleBroadcast.UnSub(Event: TAwProc);
+procedure TAwHandleBroadcastDestroy.UnSub(Event: TAwProc);
 var
   i: Integer;
 begin
@@ -151,8 +205,9 @@ begin
   end;
 end;
 
-procedure TAwHandleBroadcast.Delete(Index: Integer);
+procedure TAwHandleBroadcastDestroy.Delete(Index: Integer);
 begin
+  inc(FFlagChangedArr);
   Dec(FCount);
   if Index < FCount then
     System.Move(FArr[Index + 1], FArr[Index],

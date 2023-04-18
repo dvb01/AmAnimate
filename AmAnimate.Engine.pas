@@ -17,14 +17,15 @@ var
   AwAnimateDebugMode: boolean = false;
 
 type
-
+  TAwProcProcessMessage = procedure;
+  TAwEventLockedApplication = procedure (IsLocked:boolean) of object;
   // абстрактый класс анимаций
   TAwObject = class abstract(TInterfacedObject)
   end;
 
   // блокировка анимация до ее завершения avbLock
   // по умл. avbAsync
-  TAwBlockingBehavior = (avbLock, avbAsync);
+  TAwBlockingBehavior = (avbAsync,avbLock);
 
   // базовые классы анимации
   // базовый интерфейс Source (того объекта который будем анимаровать)
@@ -55,14 +56,22 @@ type
 
   AwFactoryBase = class(TAwObject)
   private
+
     class function CountAnimatesActiveGet: Cardinal; static;
     class function CountAnimatesCreatedGet: Cardinal; static;
     class function CountObjectsCreatedGet: Cardinal; static;
+    class function ProcApplicationProcessMessageGet: TAwProcProcessMessage;static;
+    class procedure ProcApplicationProcessMessageSet(const Value: TAwProcProcessMessage);static;
+    class function OnLockedApplicationGet: TAwEventLockedApplication; static;
+    class procedure OnLockedApplicationSet(
+      const Value: TAwEventLockedApplication); static;
+  protected
+    // что бы блокировка анимации работала IAwAnimateBase.BlockingBehavior = avbLock
+    // внешне сюда указать процедуру которая будет вызывать Application.ProcessMessage
+    class property ProcApplicationProcessMessage: TAwProcProcessMessage
+                                       read ProcApplicationProcessMessageGet
+                                       write ProcApplicationProcessMessageSet;
   public
-    // debug
-    class property CountObjectsCreated: Cardinal read CountObjectsCreatedGet;
-    class property CountAnimatesCreated: Cardinal read CountAnimatesCreatedGet;
-    class property CountAnimatesActive: Cardinal read CountAnimatesActiveGet;
     // helper
     class procedure SourceCancel(Source: IAwSource);
     class procedure Clear;
@@ -70,6 +79,20 @@ type
     class function NewList: IAwQueue;
     class function Base(AClass: TAwAnimateClass = nil): IAwAnimateBase; static;
     class function Empty(): IAwAnimateEmpty; static;
+
+    // debug
+    class property CountObjectsCreated: Cardinal read CountObjectsCreatedGet;
+    class property CountAnimatesCreated: Cardinal read CountAnimatesCreatedGet;
+    class property CountAnimatesActive: Cardinal read CountAnimatesActiveGet;
+
+    // system
+
+    // получить событие что анимация заблокировала приложение и находится в режимме ожидания исполнения анимации
+    //c сработает когда IAwAnimateBase.BlockingBehavior = avbLock
+    class property OnLockedApplication: TAwEventLockedApplication
+                                      read OnLockedApplicationGet
+                                      write OnLockedApplicationSet;
+
   end;
 {$ENDREGION}
 
@@ -78,6 +101,7 @@ type
 
   IAwQueue = interface(IInterface)
     // private
+    function StartedGet: Boolean;
     function RepeatCountGet: Integer;
     procedure RepeatCountSet(const Value: Integer);
     function RepeatCurIndexGet: Integer;
@@ -87,8 +111,8 @@ type
     // по формуле Prev.Delay + Self.StartOffset может быть <0
     procedure Add(Value: IAwAnimateBase; StartOffset: Integer);
     property RepeatCount: Integer read RepeatCountGet write RepeatCountSet;
-    property RepeatCurIndex: Integer read RepeatCurIndexGet
-      write RepeatCurIndexSet;
+    property RepeatCurIndex: Integer read RepeatCurIndexGet write RepeatCurIndexSet;
+    property Started: Boolean read StartedGet;
     procedure Start;
     // отмена выполнения очереди если в очереди есть IAmAnimateBase.Source  = Source то вся очередь отменяется
     procedure CancelSource(Source: IAwSource);
@@ -195,14 +219,14 @@ type
     function SourceGet: IAwSource;
     function ActiveGet: boolean;
     function PauseGet: boolean;
-    function ManagerGet: TObject;
+    function RunnerGet: TObject;
     function AsAnimateExecutorGet: IAwAnimateBase;
     function IsDestroyingGet: boolean;
-    procedure ManagerSet(const Value: TObject);
+    procedure RunnerSet(const Value: TObject);
     function EventRun: Cardinal;
     procedure Cancel;
     procedure Terminate;
-    property Manager: TObject read ManagerGet write ManagerSet;
+    property Runner: TObject read RunnerGet write RunnerSet;
     property AsAnimateExecutor: IAwAnimateBase read AsAnimateExecutorGet;
     property IsDestroying: boolean read IsDestroyingGet;
     property Active: boolean read ActiveGet;
@@ -337,10 +361,8 @@ type
   private
     FId: Cardinal;
     FName: string;
-    [unsafe]
-    FManager: TObject; // TvManager;
-    [weak]
-    FParentList: IAwLocQueue;
+    [unsafe]FRunner: TObject; // TbwRunner;
+    [weak] FParentList: IAwLocQueue;
     FBar: TBar;
     FActive: boolean;
     FPause: boolean;
@@ -403,8 +425,8 @@ type
     procedure ReCreateBar;
     // IAwLocExecutor
     function EventRun: Cardinal;
-    function ManagerGet: TObject;
-    procedure ManagerSet(const Value: TObject);
+    function RunnerGet: TObject;
+    procedure RunnerSet(const Value: TObject);
     function AsAnimateExecutorGet: IAwAnimateBase;
     function IsDestroyingGet: boolean;
     function OnFinishLastGet: TAwEvent;
@@ -412,7 +434,7 @@ type
     function OnStartFerstGet: TAwEvent;
     procedure OnStartFerstSet(const Value: TAwEvent);
   protected
-    property Manager: TObject read ManagerGet;
+    property Runner: TObject read RunnerGet;
     procedure EventStartFerst; virtual;
     procedure EventFinishLast; virtual;
     procedure EventFinish; virtual;
@@ -524,6 +546,7 @@ type
     function ToArrayAndClear(): TArray<Pointer>;
   end;
 
+
   TbwTimer = class
   strict private
     FInterval: Cardinal;
@@ -536,7 +559,7 @@ type
     procedure SetOnTimer(Value: TNotifyEvent);
     procedure WndProc(var Msg: TMessage);
   protected
-    procedure Timer; dynamic;
+    procedure Timer;
   public
     constructor Create;
     destructor Destroy; override;
@@ -555,6 +578,7 @@ type
     FRepeatCurIndex: Integer;
     FIsDestoying: boolean;
     FTerminated: boolean;
+    FStarted:boolean;
     function CheckCurIndex: boolean;
     function MoveRepeatReset: boolean;
     function MoveNext: boolean;
@@ -564,7 +588,8 @@ type
     procedure InternalCancelAll;
     procedure InternalClearWeak;
   protected
-    // IAmAnimateQueue
+    // IAwQueue
+    function StartedGet: Boolean;
     function RepeatCountGet: Integer;
     procedure RepeatCountSet(const Value: Integer);
     function RepeatCurIndexGet: Integer;
@@ -574,7 +599,7 @@ type
     procedure Add(Value: IAwAnimateBase; StartOffset: Integer);
     procedure Start;
     procedure CancelSource(Source: IAwSource);
-    // IvLocalExecutorQueue
+    // IAwLocQueue
     procedure NotifyTick(Sender: IAwAnimateBase; isFinish: boolean);
     procedure CancelAll;
   public
@@ -644,6 +669,7 @@ type
     procedure TimerUpdate(AInterval: Cardinal);
     property Count: Integer read CountGet;
     property Items[index: Integer]: IAwLocExecutor read ItemsGet;
+    procedure WaitFor(Value: IAwLocExecutor);
   private
     procedure Add(Value: IAwLocExecutor);
     procedure Remove(Value: IAwLocExecutor);
@@ -689,6 +715,8 @@ type
     class var CountObjectsCreated: Cardinal;
     class var CountAnimatesCreated: Cardinal;
     class var CountAnimatesActive: Cardinal;
+    class var ProcApplicationProcessMessage: TAwProcProcessMessage;
+    class var OnLockedApplication: TAwEventLockedApplication;
 
     class function AnimateNewId: Cardinal;
     class procedure AnimateAddToExcecute(Value: IAwLocExecutor);
@@ -697,10 +725,29 @@ type
     class procedure SourceCancel(Source: IAwSource);
     class procedure StorageListQueueAdd(ListAnimate: IAwQueue);
     class procedure StorageListQueueRemove(ListAnimate: IAwQueue);
+
   public
     constructor Create;
     destructor Destroy; override;
   end;
+
+procedure LocalHandleException(Sender: TObject);
+var
+  O: TObject;
+begin
+   if Assigned(ApplicationHandleException) then
+   System.Classes.ApplicationHandleException(Sender)
+   else
+    begin
+        if GetCapture <> 0 then SendMessage(GetCapture, WM_CANCELMODE, 0, 0);
+        O := ExceptObject;
+      {$IF DEFINED(CLR)}
+          SysUtils.ShowException(O, nil);
+      {$ELSE}
+          System.SysUtils.ShowException(O, ExceptAddr);
+      {$ENDIF}
+    end;
+end;
 
 function TbwList.BinaryOfIndex(Value: Pointer;
   var IndexInsert: Integer): boolean;
@@ -759,26 +806,28 @@ begin
   inherited Destroy;
 end;
 
+
+
 procedure TbwTimer.WndProc(var Msg: TMessage);
 begin
-  with Msg do
-    if Msg = WM_TIMER then
+    if Msg.Msg = WM_TIMER then
       try
         Timer;
       except
-        on E: Exception do
-          raise;
+        LocalHandleException(self);
       end
     else
-      Result := DefWindowProc(FWindowHandle, Msg, wParam, lParam);
+     Msg.Result := DefWindowProc(FWindowHandle, Msg.Msg, Msg.wParam, Msg.lParam);
 end;
 
 procedure TbwTimer.UpdateTimer;
 begin
   KillTimer(FWindowHandle, 1);
   if (FInterval <> 0) and FEnabled and Assigned(FOnTimer) then
+  begin
     if SetTimer(FWindowHandle, 1, FInterval, nil) = 0 then
         raise Exception.CreateResFmt(@RsTbwTimer_UpdateTimer, []);
+  end;
 end;
 
 procedure TbwTimer.SetEnabled(Value: boolean);
@@ -816,6 +865,7 @@ end;
 constructor TbwQueue.Create;
 begin
   inherited;
+  FStarted:=false;
   FList := TbwList.Create;
   FTerminated := false;
   FCurIndex := -1;
@@ -839,6 +889,11 @@ begin
   FTerminated := true;
   InternalClearWeak;
   inherited;
+end;
+
+function TbwQueue.StartedGet: Boolean;
+begin
+  Result:= FStarted;
 end;
 
 function TbwQueue.RepeatCountGet: Integer;
@@ -909,6 +964,7 @@ begin
   for I := 0 to length(Arr) - 1 do
   begin
     Value := IAwAnimateBase(Arr[I]);
+    Value.AsObject.FParentList := nil;
     Value.Terminate;
   end;
   for I := 0 to length(Arr) - 1 do
@@ -940,6 +996,9 @@ end;
 procedure TbwQueue.Insert(Index: Integer; Value: IAwAnimateBase;
   StartOffset: Integer);
 begin
+ // if FStarted then
+ //  raise Exception.CreateResFmt(@RsTbwQueue_Insert,[]);
+
   if (Value = nil) or (Value.AsObject = nil) then
     exit;
 
@@ -955,6 +1014,7 @@ end;
 
 procedure TbwQueue.CancelAll;
 begin
+  FStarted:=false;
   InternalCancelAll;
   TbwManager.StorageListQueueRemove(Self);
 end;
@@ -980,16 +1040,19 @@ end;
 
 procedure TbwQueue.Start;
 begin
-  if not FIsDestoying and MoveNext then
+  if not FIsDestoying and not FStarted and MoveNext then
   begin
+    FStarted:=true;
     TbwManager.StorageListQueueAdd(Self);
     Current.Start;
+    if not Current.Active then
+      CancelAll;
   end;
 end;
 
 procedure TbwQueue.NotifyTick(Sender: IAwAnimateBase; isFinish: boolean);
 var
-  b: boolean;
+  b,IsStartUp: boolean;
 
   function LocGetPrev: IAwAnimateBase;
   begin
@@ -1001,6 +1064,18 @@ var
     end;
   end;
 
+  function LocCurrentStart:boolean;
+  begin
+     Result:=false;
+     if Current = nil then
+     begin
+       exit;
+     end;
+     Current.Start;
+     Result:= Current.Active;
+     IsStartUp:= Result;
+  end;
+
   procedure LocFinish;
   var
     APrev: IAwAnimateBase;
@@ -1010,16 +1085,9 @@ var
     R := MoveNext;
     if not R then
     begin
-      if not MoveRepeatReset then
-      begin
-        CancelAll;
+      if  not MoveRepeatReset then
         exit;
-      end;
-
-      if not Current.IsDestroying then
-        Current.Start
-      else
-        CancelAll;
+      LocCurrentStart;
     end
     else
     begin
@@ -1031,11 +1099,7 @@ var
         APad.Delay := Current.AsObject.StartOffset;
         Insert(FCurIndex, APad, 0);
       end;
-
-      if not Current.IsDestroying then
-        Current.Start // тоже что и Pad.Start;
-      else
-        CancelAll;
+      LocCurrentStart; // тоже что и Pad.Start;
     end;
   end;
 
@@ -1056,10 +1120,7 @@ var
         ADelta := ADelay - ADelta + Current.AsObject.StartOffset;
         if ADelta <= 0 then
         begin
-          if not Current.IsDestroying then
-            Current.Start
-          else
-            CancelAll;
+          if LocCurrentStart then
           MoveNext;
         end;
       end;
@@ -1069,6 +1130,7 @@ var
   end;
 
 begin
+  //  анимация прислана событие что она или выполняется или завершается
   b := (Sender = nil) or (Sender.AsObject = nil) or
     (Sender as IInterface <> Current as IInterface) or FIsDestoying;
   if b then
@@ -1077,10 +1139,22 @@ begin
       CancelAll;
     exit;
   end;
-  if isFinish then
-    LocFinish
-  else
-    LocTick;
+  // если выполняется то проверить на необходимость запуска и запустить
+  //следующую анимацию если у нее  StartOffset < 0
+  // если завершается то запустить следующую
+
+  IsStartUp:=false;
+  if not isFinish then
+  begin
+     LocTick;
+     exit;
+  end;
+  try
+   LocFinish;
+  finally
+    if not IsStartUp then
+     CancelAll;
+  end;
 end;
 (*
 
@@ -1362,13 +1436,27 @@ begin
     end;
 end;
 
+procedure TbwRunner.WaitFor(Value: IAwLocExecutor);
+begin
+  if (Value.AsAnimateExecutor.BlockingBehavior <> avbLock)
+  or (Value.AsAnimateExecutor.AsObject.FParentList <> nil) then
+   exit;
+  while Value.Active and
+  Assigned(TbwManager.ProcApplicationProcessMessage) do
+  begin
+     TbwManager.ProcApplicationProcessMessage();
+     sleep(1);
+  end;
+
+end;
+
 procedure TbwRunner.Add(Value: IAwLocExecutor);
 var
   I: Integer;
 begin
-  if (Value = nil) or (Value.Manager = Self) then
+  if (Value = nil) or (Value.Runner = Self) then
     exit;
-  Value.Manager := Self;
+  Value.Runner := Self;
   if FList.BinaryOfIndex(Value, I) then
     exit;
   FList.Insert(I, Value);
@@ -1376,6 +1464,7 @@ begin
   Value._AddRef;
   inc(TbwManager.CountAnimatesActive);
   TimerUpdate(10);
+  WaitFor(Value);
 end;
 
 procedure TbwRunner.Delete(Value: IAwLocExecutor; AIndex: Integer);
@@ -1390,9 +1479,9 @@ procedure TbwRunner.Remove(Value: IAwLocExecutor);
 var
   I: Integer;
 begin
-  if (Value = nil) or (Value.Manager <> Self) then
+  if (Value = nil) or (Value.Runner <> Self) then
     exit;
-  Value.Manager := nil;
+  Value.Runner := nil;
   if FList.Count > 0 then
   begin
     if FList.Last = Pointer(Value) then
@@ -1459,6 +1548,7 @@ procedure TbwRunner.TimerEvent(Sender: TObject);
 var
   I: Integer;
   ms, mc: Cardinal;
+  Item:IAwLocExecutor;
 begin
   if FFlagTimerLocked > 0 then
     exit;
@@ -1471,7 +1561,9 @@ begin
       repeat
         for I := Count - 1 downto 0 do
         begin
-          mc := Items[I].EventRun;
+          Item:= Items[I];
+          mc := Item.EventRun;
+          Item:=nil;
           if mc > 0 then
             ms := min(mc, ms);
           if FFlagListChanged > 0 then
@@ -1593,6 +1685,8 @@ end;
 class procedure TbwManager.InstanceInit;
 begin
   Instance := nil;
+  ProcApplicationProcessMessage:=nil;
+  OnLockedApplication:=nil;
   AnimateCounterId := 0;
   CountObjectsCreated := 0;
   CountAnimatesCreated := 0;
@@ -1921,7 +2015,7 @@ begin
   FIsWasTickRun := false;
   FId := TbwManager.AnimateNewId;
   FName := '';
-  FManager := nil;
+  FRunner := nil;
   FRepeatCount := 1;
   FRepeatIndex := -1;
   FBar := nil;
@@ -1950,7 +2044,7 @@ begin
     FreeAndNil(FOption);
   if FBar <> nil then
     FreeAndNil(FBar);
-  FManager := nil;
+  FRunner := nil;
   dec(TbwManager.CountAnimatesCreated);
   dec(TbwManager.CountObjectsCreated);
   inherited;
@@ -2145,9 +2239,14 @@ begin
 end;
 
 procedure TAwLocExecutor.EventToList(isFinish: boolean);
+var AList: IAwLocQueue;
 begin
   if Assigned(FParentList) then
-    FParentList.NotifyTick(Self, isFinish);
+  begin
+    AList:=  FParentList;
+    AList.NotifyTick(Self, isFinish);
+    AList:=nil;
+  end;
 end;
 
 procedure TAwLocExecutor.EventFinish;
@@ -2222,14 +2321,14 @@ begin
     raise Exception.CreateResFmt(@RsTAwLocExecutor_TBar,[]);
 end;
 
-function TAwLocExecutor.ManagerGet: TObject;
+function TAwLocExecutor.RunnerGet: TObject;
 begin
-  Result := FManager;
+  Result := FRunner;
 end;
 
-procedure TAwLocExecutor.ManagerSet(const Value: TObject);
+procedure TAwLocExecutor.RunnerSet(const Value: TObject);
 begin
-  FManager := Value;
+  FRunner := Value;
 end;
 
 function TAwLocExecutor.AsAnimateExecutorGet: IAwAnimateBase;
@@ -2486,6 +2585,28 @@ end;
 class function AwFactoryBase.NewList: IAwQueue;
 begin
   Result := TbwQueue.Create;
+end;
+
+class function AwFactoryBase.OnLockedApplicationGet: TAwEventLockedApplication;
+begin
+   Result:= TbwManager.OnLockedApplication;
+end;
+
+class procedure AwFactoryBase.OnLockedApplicationSet(
+  const Value: TAwEventLockedApplication);
+begin
+   TbwManager.OnLockedApplication:= Value;
+end;
+
+class function AwFactoryBase.ProcApplicationProcessMessageGet: TAwProcProcessMessage;
+begin
+    Result:= TbwManager.ProcApplicationProcessMessage;
+end;
+
+class procedure AwFactoryBase.ProcApplicationProcessMessageSet(
+  const Value: TAwProcProcessMessage);
+begin
+   TbwManager.ProcApplicationProcessMessage:= Value;
 end;
 
 class function AwFactoryBase.Base(AClass: TAwAnimateClass): IAwAnimateBase;

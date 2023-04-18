@@ -12,7 +12,8 @@ uses
   Vcl.Controls,
   Vcl.Forms,
   Vcl.Dialogs,
-  AmAnimate.Source.Intf;
+  AmAnimate.Source.Intf,
+  AmAnimate.Engine;
 
  type
   TAwSourceSimple = class (TInterfacedObject,IAwSourceBounds,IAwSourceAlfa,IAwSource)
@@ -29,7 +30,7 @@ uses
      var
       FNotifer:TNotifer;
       FControl:TWinControl;
-      FEvent:TAwHandleBroadcast;
+      FEvent:TAwHandleBroadcastDestroy;
     protected
      procedure SubOnDestroy(NotifyEvent:TAwProc);
      procedure UnSubOnDestroy(NotifyEvent:TAwProc);
@@ -55,7 +56,7 @@ begin
    FNotifer:=TNotifer.Create(nil);
    FNotifer.SourceSimple:= self;
    FControl:=AControl;
-   FEvent:=TAwHandleBroadcast.Create;
+   FEvent:=TAwHandleBroadcastDestroy.Create;
    if (FControl <> nil)
    and not (csDestroying in FControl.ComponentState) then
       FNotifer.FreeNotification(FControl)
