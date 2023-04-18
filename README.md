@@ -21,3 +21,5 @@
 ```
 ![Preview](/READMEFILES/1.gif "Фото Программы")
 ![Preview](/READMEFILES/2.gif "Фото Программы")
+![Preview](/READMEFILES/3.gif "Фото Программы")
+![Preview](/READMEFILES/5.gif "Фото Программы")
