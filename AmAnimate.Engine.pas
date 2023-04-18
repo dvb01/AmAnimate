@@ -735,7 +735,7 @@ procedure LocalHandleException(Sender: TObject);
 var
   O: TObject;
 begin
-   if Assigned(ApplicationHandleException) then
+   if Assigned(System.Classes.ApplicationHandleException) then
    System.Classes.ApplicationHandleException(Sender)
    else
     begin

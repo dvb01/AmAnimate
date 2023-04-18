@@ -57,7 +57,7 @@ type
   strict private
     FArr: TArray<TAwProc>;
     FCount: Integer;
-    FFlagChangedArr:integer;
+    FFlagChangedArr:boolean;
     FFlagInvokeLock:integer;
     function Capacity: Integer;
     procedure Grow;
@@ -81,7 +81,7 @@ begin
   inherited;
   FCount := 0;
   FArr := nil;
-  FFlagChangedArr:=0;
+  FFlagChangedArr:=false;
   FFlagInvokeLock:=0;
 end;
 
@@ -134,9 +134,9 @@ begin
    raise Exception.CreateResFmt(@RsTAwHandleBroadcast_Invoke,[]);
    inc(FFlagInvokeLock);
    try
-       FFlagChangedArr:=0;
+       FFlagChangedArr:=false;
        IsBreaker:= false;
-       Map:=TDictionary<TAwProc,Boolean>.Create;
+       Map:=TDictionary<TAwProc,Boolean>.Create(FCount);
        try
           while (FCount > 0) and  not IsBreaker do
           begin
@@ -146,16 +146,16 @@ begin
              begin
               Proc:= FArr[i];
               Proc();
-              if FFlagChangedArr <> 0 then
+              if FFlagChangedArr then
               begin
-                FFlagChangedArr:=0;
+                FFlagChangedArr:=false;
                 IsBreaker:=false;
                 break;
               end;
              end;
           end;
        finally
-         FFlagChangedArr:=0;
+         FFlagChangedArr:=false;
          Map.Free;
        end;
    finally
@@ -182,7 +182,7 @@ begin
   if FFlagInvokeLock <> 0 then
   raise Exception.CreateResFmt(@RsTAwHandleBroadcast_Sub,[]);
   CheckGrow;
-  inc(FFlagChangedArr);
+  FFlagChangedArr:=true;
   FArr[FCount] := Event;
   inc(FCount);
 end;
@@ -207,7 +207,7 @@ end;
 
 procedure TAwHandleBroadcastDestroy.Delete(Index: Integer);
 begin
-  inc(FFlagChangedArr);
+  FFlagChangedArr:=true;
   Dec(FCount);
   if Index < FCount then
     System.Move(FArr[Index + 1], FArr[Index],
