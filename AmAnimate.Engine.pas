@@ -15,17 +15,16 @@ uses
 
 var
   AwAnimateDebugMode: boolean = false;
+  AwAnimateNotBlockingMode: boolean = false;
 
 type
-  TAwProcProcessMessage = procedure;
+  TAwProcProcessMessage = procedure of object;
   TAwEventLockedApplication = procedure (IsLocked:boolean) of object;
   // абстрактый класс анимаций
   TAwObject = class abstract(TInterfacedObject)
   end;
 
-  // блокировка анимация до ее завершения avbLock
-  // по умл. avbAsync
-  TAwBlockingBehavior = (avbAsync,avbLock);
+
 
   // базовые классы анимации
   // базовый интерфейс Source (того объекта который будем анимаровать)
@@ -136,8 +135,8 @@ type
     function IdGet: Cardinal;
     function NameGet: string;
     procedure NameSet(const Value: string);
-    function BlockingBehaviorGet: TAwBlockingBehavior;
-    procedure BlockingBehaviorSet(const Value: TAwBlockingBehavior);
+    function BlockingGet: Boolean;
+    procedure BlockingSet(const Value: Boolean);
     function ProgressIndexGet: Integer;
     function ProgressGet: Real;
     function ProgressCountGet: Integer;
@@ -170,9 +169,26 @@ type
     property Id: Cardinal read IdGet;
     // произвольное имя
     property Name: string read NameGet write NameSet;
+
+
     // блокировка анимация
-    property BlockingBehavior: TAwBlockingBehavior read BlockingBehaviorGet
-      write BlockingBehaviorSet;
+    // анимация запускаем в режиме модальной формы
+    //приложение не закроется если будет выполнятся анимация
+    // обрабатывайте событие о блокировке закрытия программы
+    // AwFactoryBase.OnLockedApplication
+    // пока счетчик >0 дайте пользователю подождать при закрытии программы
+    // или
+    // 1. отмените все анимации
+    // 2. не закрывайте прогрмму выполнив отмену закрытия
+    // 3. сразу отправьте на форму postmessage
+    // 4. примите postmessage а там уже закройте прогу
+    // TForm.Release в некоторых случаях может помочь
+    // что бы уберечь себя от случайного использования установите
+    // AwAnimateNotBlockingMode = true
+    property Blocking: Boolean read BlockingGet write BlockingSet;
+
+
+
     // настройка интервал серцебиения по умолчанию 20 ms
     property IntervalHeartBeat: Cardinal read IntervalHeartBeatGet
       write IntervalHeartBeatSet;
@@ -366,7 +382,7 @@ type
     FBar: TBar;
     FActive: boolean;
     FPause: boolean;
-    FBlockingBehavior: TAwBlockingBehavior;
+    FBlocking: Boolean;
     FIsDestroying: boolean;
     FDebugMode: boolean;
     FIsWasTickRun: boolean;
@@ -391,8 +407,8 @@ type
     function PauseGet: boolean;
     procedure PauseSet(const Value: boolean);
     function ProgressGet: Real;
-    function BlockingBehaviorGet: TAwBlockingBehavior;
-    procedure BlockingBehaviorSet(const Value: TAwBlockingBehavior);
+    function BlockingGet: Boolean;
+    procedure BlockingSet(const Value: Boolean);
     function SourceGet: IAwSource;
     procedure SourceSet(const Value: IAwSource);
     function ProgressIndexGet: Integer;
@@ -460,8 +476,7 @@ type
     property IntervalHeartBeat: Cardinal read IntervalHeartBeatGet
       write IntervalHeartBeatSet;
     property Source: IAwSource read SourceGet write SourceSet;
-    property BlockingBehavior: TAwBlockingBehavior read BlockingBehaviorGet
-      write BlockingBehaviorSet;
+    property Blocking: Boolean read BlockingGet write BlockingSet;
     property RepeatCount: Integer read RepeatCountGet write RepeatCountSet;
     property StartOffset: Integer read StartOffsetGet write StartOffsetSet;
     property DebugMode: boolean read DebugModeGet write DebugModeSet;
@@ -1438,14 +1453,23 @@ end;
 
 procedure TbwRunner.WaitFor(Value: IAwLocExecutor);
 begin
-  if (Value.AsAnimateExecutor.BlockingBehavior <> avbLock)
-  or (Value.AsAnimateExecutor.AsObject.FParentList <> nil) then
+  if AwAnimateNotBlockingMode or not Value.AsAnimateExecutor.Blocking
+  or (Value.AsAnimateExecutor.AsObject.FParentList <> nil)
+  or not Assigned(TbwManager.ProcApplicationProcessMessage) then
    exit;
-  while Value.Active and
-  Assigned(TbwManager.ProcApplicationProcessMessage) do
-  begin
-     TbwManager.ProcApplicationProcessMessage();
-     sleep(1);
+
+  if Assigned(TbwManager.OnLockedApplication) then
+   TbwManager.OnLockedApplication(true);
+  try
+    while Value.Active and
+    Assigned(TbwManager.ProcApplicationProcessMessage) do
+    begin
+       TbwManager.ProcApplicationProcessMessage();
+       sleep(1);
+    end;
+  finally
+   if Assigned(TbwManager.OnLockedApplication) then
+   TbwManager.OnLockedApplication(false);
   end;
 
 end;
@@ -2020,7 +2044,7 @@ begin
   FRepeatIndex := -1;
   FBar := nil;
   FActive := false;
-  FBlockingBehavior := avbAsync;
+  FBlocking := false;
   FPause := false;
   FIsDestroying := false;
   FSource := nil;
@@ -2289,14 +2313,14 @@ begin
   FStartOffset := Value;
 end;
 
-function TAwLocExecutor.BlockingBehaviorGet: TAwBlockingBehavior;
+function TAwLocExecutor.BlockingGet: Boolean;
 begin
-  Result := FBlockingBehavior;
+  Result := FBlocking;
 end;
 
-procedure TAwLocExecutor.BlockingBehaviorSet(const Value: TAwBlockingBehavior);
+procedure TAwLocExecutor.BlockingSet(const Value: Boolean);
 begin
-  FBlockingBehavior := Value;
+  FBlocking := Value;
 end;
 
 function TAwLocExecutor.DelayGet: Cardinal;

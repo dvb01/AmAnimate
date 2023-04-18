@@ -355,4 +355,13 @@ begin
      Result:= inherited SetBounds(Rect);
 end;
 
+
+type
+ LocAwFactoryBase = class (AwFactoryBase)end;
+
+initialization
+ LocAwFactoryBase.ProcApplicationProcessMessage:=Application.ProcessMessages;
+finalization
+  LocAwFactoryBase.ProcApplicationProcessMessage:=nil;
+
 end.
