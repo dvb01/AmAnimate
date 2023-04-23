@@ -16,6 +16,8 @@ type
   private
     function GetRect: TRectF;
     procedure SetRect(Value: TRectF);
+    function LocationGet: TPointF;
+    procedure LocationSet(const Value: TPointF);
   public
     Left: Single;
     Top: Single;
@@ -23,6 +25,8 @@ type
     Height: Single;
     procedure Clear;
     property Rect: TRectF read GetRect write SetRect;
+    property Location: TPointF read LocationGet write LocationSet;
+    function IsValid:boolean;
   end;
 
   TAwCalcRef = reference to function(Progress: Real): Real;
@@ -62,7 +66,7 @@ type
   private
     FEffectMain: TAwEnumEffectMain;
     FEffectMode: TAwEnumEffectMode;
-    FCalc: TAwCalcRef;
+    FCalc: TAwCalcRef; // функция модификатора
     procedure CalcSet(const Value: TAwCalcRef);
   public
     property Calc: TAwCalcRef read FCalc write CalcSet;
@@ -79,9 +83,9 @@ type
   PAwEffectSide = ^TAwEffectSide;
 
   TAwEffectSide = record
-    Count: Single; //
-    Delta: Single; // изменение размера или позиции но может быть что угодно
-    Effect: TAwEffectModeficator;
+    Count: Single; //  CountRepeat сколько повторов успеть сделать за Delay
+    Delta: Single; // дельта изменения (размера, прозрачности цвета что угодно может быть)
+    Effect: TAwEffectModeficator;// с каким эффектом выполнить изменение
     procedure Default;
     procedure Random;
     procedure Clear;
@@ -111,7 +115,10 @@ type
     procedure Random;
     procedure Clear;
     function IsValid: boolean;
+    procedure EffectSet(AEffectMain: TAwEnumEffectMain;
+      AEffectMode: TAwEnumEffectMode);
   end;
+
 
   // математика и расчеты
   TAwMath = class(TObject)
@@ -136,17 +143,14 @@ type
     class function Swing100(Progress: Real): Real; static;
     class function Swing200(Progress: Real): Real; static;
 
-    class function SwingTime(CountRepeat, Diff: Single; Progress: Real): Single;
-    class function SwingToSingle(StartValue, EndValue: Single; Progress: Real;
-      const Func: TAwCalcRef): Single;
+    class function SwingTime(CountRepeat, Diff: Single; Progress: Real): Single; static;
+    class function SwingToSingle(StartValue, EndValue: Single; Progress: Real; const Func: TAwCalcRef): Single; static;
 
-    class function MoveEffect(Start, Stop: TPointF; Progress: Real): TPointF;
+    class function MoveEffect(Start, Stop: TPointF; Progress: Real; FuncCalcX, FuncCalcY: TAwCalcRef): TPointF;static;
 
-    class function EnumToFuncRef(Line: TAwEnumEffectMain;
-      Mode: TAwEnumEffectMode): TAwCalcRef;
-    class function EnumLineToFunc(Line: TAwEnumEffectMain): TAwCalcStd;
-    class function EnumModeToFunc(Func: TAwCalcStd; Mode: TAwEnumEffectMode)
-      : TAwCalcRef;
+    class function EnumToFuncRef(Line: TAwEnumEffectMain; Mode: TAwEnumEffectMode): TAwCalcRef;static;
+    class function EnumLineToFunc(Line: TAwEnumEffectMain): TAwCalcStd; static;
+    class function EnumModeToFunc(Func: TAwCalcStd; Mode: TAwEnumEffectMode) : TAwCalcRef; static;
   end;
 
 implementation
@@ -281,17 +285,16 @@ begin
   Result := StartValue + ((EndValue - StartValue) * Progress);
 end;
 
-class function TAwMath.MoveEffect(Start, Stop: TPointF; Progress: Real)
-  : TPointF;
-var
-  Ref1, Ref2: TAwCalcRef;
+class function TAwMath.MoveEffect(Start, Stop: TPointF; Progress: Real; FuncCalcX, FuncCalcY: TAwCalcRef) : TPointF;
+//var
+ // Ref1, Ref2: TAwCalcRef;
 begin
-  Ref1 := TAwMath.EnumToFuncRef(TAwEnumEffectMain.atlBack,
-    TAwEnumEffectMode.atmIn);
+ { Ref1 := EnumToFuncRef(EffectMainX, TAwEnumEffectMode.atmIn);
   Ref2 := TAwMath.EnumToFuncRef(TAwEnumEffectMain.atlCircle,
     TAwEnumEffectMode.atmInSnake);
-  Result.X := SwingToSingle(Start.X, Stop.X, Progress, Ref1);
-  Result.Y := SwingToSingle(Start.Y, Stop.Y, Progress, Ref2);
+    }
+  Result.X := SwingToSingle(Start.X, Stop.X, Progress, FuncCalcX);
+  Result.Y := SwingToSingle(Start.Y, Stop.Y, Progress, FuncCalcY);
 end;
 
 class function TAwMath.EnumLineToFunc(Line: TAwEnumEffectMain): TAwCalcStd;
@@ -486,10 +489,28 @@ end;
 
 function TAwBounds.GetRect: TRectF;
 begin
-  Result.Left := Left;;
+  Result.Left := Left;
   Result.Top := Top;
   Result.Width := Width;
   Result.Height := Height;
+end;
+
+function TAwBounds.IsValid: boolean;
+begin
+ // не нужно чекать параметры для валидности
+ // т.к left top может быть любое число а Width Height чекается в исполнителе
+ Result:= true;
+end;
+
+function TAwBounds.LocationGet: TPointF;
+begin
+  Result:= Rect.Location;
+end;
+
+procedure TAwBounds.LocationSet(const Value: TPointF);
+begin
+   Left:= Value.X;
+   Top:= Value.Y;
 end;
 
 procedure TAwBounds.SetRect(Value: TRectF);
@@ -695,6 +716,14 @@ begin
   Top.Random;
   Width.Random;
   Height.Random;
+end;
+
+procedure TAwEffectBounds.EffectSet(AEffectMain: TAwEnumEffectMain; AEffectMode: TAwEnumEffectMode);
+begin
+   Left.EffectSet(AEffectMain,AEffectMode);
+   Top.EffectSet(AEffectMain,AEffectMode);
+   Width.EffectSet(AEffectMain,AEffectMode);
+   Height.EffectSet(AEffectMain,AEffectMode);
 end;
 
 { TAwEffectPoint }

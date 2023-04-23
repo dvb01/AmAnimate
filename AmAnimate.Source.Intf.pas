@@ -5,12 +5,20 @@ interface
 uses
   System.SysUtils,
   System.Types,
+  System.classes,
   System.Generics.Collections,
   AmAnimate.Res;
 
 type
 
   TAwProc = procedure of object;
+  IAwSourceEvent = interface;
+
+  IAwAnimateIntf = interface(IInterface)
+
+  end;
+
+
 
   // базовый интерфейс Source (того объекта который будем анимаровать)
   // текущий модуль низко уровневый так что о котролах он не знает
@@ -22,16 +30,37 @@ type
   // ControlGet должен возвращать всегда одну и туже ссылку или nil
   IAwSource = interface(IInterface)
     ['{BFBE373B-0EA6-455D-85A3-10F99A4A080E}']
+
     // отправьте событие в процедуры которые подписались на SubOnDestroy когда  IAwSource удаляется
     procedure SubOnDestroy(NotifyEvent: TAwProc);
     // объект анимации гарантированно отпищется от события когда будет удалятся
     procedure UnSubOnDestroy(NotifyEvent: TAwProc);
+
     // ваши данные в объекте валидны можно делать анимацию
     function IsValid: boolean;
+
     // используется что бы сравнить Pointer при отмене анимации для ControlGet
     // ControlGet это например TControl тот объект над которым выполнятся анимация
     function ControlGet: Pointer;
     property Control: Pointer read ControlGet;
+
+    // если вы вернете не nil то в этот интерфйс будут отправлятся события о процессе анимации
+    function EventsGet:IAwSourceEvent;
+    property Events: IAwSourceEvent read EventsGet;
+  end;
+
+  // интерфейс событиий которые происходят в анимации
+  // интерфейс являяется свойсвом интефейса IAwSource
+  // события вынесены для уведомления и блокировки контрола
+  IAwSourceEvent = interface(IInterface)
+     //   Sender:IAwAnimateIntf as AmAnimate.Engine.IAwAnimateBase
+     // предполагается что sender будет использовтся только для чтения состояний анимации
+     // пока отдельный интерфейс не делал
+     procedure EventStartFerst( const Sender:IAwAnimateIntf);
+     procedure EventFinishLast( const Sender:IAwAnimateIntf);
+     procedure EventStart(const Sender:IAwAnimateIntf);
+     procedure EventFinish(const Sender:IAwAnimateIntf);
+     procedure EventProcess(const Sender:IAwAnimateIntf);
   end;
 
   // используется в процессе анимации что бы получить установить Bounds контролу
@@ -42,12 +71,14 @@ type
     ['{5A91D83D-80E5-48A9-BAA0-F5729358C94D}']
     function GetBounds(var Rect: TRectF): boolean;
     function SetBounds(const Rect: TRectF): boolean;
+
+
   end;
 
   // используется что бы анимировать прозрачность
   IAwSourceAlfa = interface(IAwSource)
     ['{062872E6-D13A-4A40-89F6-DB4A0D4EE36A}']
-    function GetAlfa: byte;
+    function GetAlfa(var Value:byte): boolean;
     function SetAlfa(const Value: byte): boolean;
   end;
 
@@ -57,8 +88,8 @@ type
   strict private
     FArr: TArray<TAwProc>;
     FCount: Integer;
-    FFlagChangedArr:boolean;
-    FFlagInvokeLock:integer;
+    FFlagChangedArr: boolean;
+    FFlagInvokeLock: Integer;
     function Capacity: Integer;
     procedure Grow;
     procedure CheckGrow;
@@ -81,8 +112,8 @@ begin
   inherited;
   FCount := 0;
   FArr := nil;
-  FFlagChangedArr:=false;
-  FFlagInvokeLock:=0;
+  FFlagChangedArr := false;
+  FFlagInvokeLock := 0;
 end;
 
 destructor TAwHandleBroadcastDestroy.Destroy;
@@ -100,69 +131,67 @@ end;
 procedure TAwHandleBroadcastDestroy.CheckGrow;
 begin
   if FCount >= Capacity then
-    Grow;
+     Grow;
 end;
 
 procedure TAwHandleBroadcastDestroy.Grow;
 begin
-  Setlength(FArr, Capacity + 20);
+  Setlength(FArr,GrowCollection(Capacity,Capacity+1));
 end;
 
 procedure TAwHandleBroadcastDestroy.Invoke;
 var
   i: Integer;
-  Map:TDictionary<TAwProc,Boolean>;
-  Proc:TAwProc;
-  IsBreaker:boolean;
+  Map: TDictionary<TAwProc, boolean>;
+  Proc: TAwProc;
+  IsBreaker: boolean;
 begin
   if FCount <= 0 then
     exit;
-   // Setlength(A, FCount);
-   // Move(FArr[0], A[0], Sizeof(TAwProc) * FCount);
-   // for i := Length(A) - 1 downto 0 do
-   //   A[i]();
-   // во время выпонения   A[i]();
-   // FArr может поменятся сколько угодно раз как и добавление так и удаление
-   // поэтому после каждого вызова нужно заново обращатся к FArr и проходить по списку
-   // пока не пройдем все процедуры
-   // т.к этот объект используется только для события удаления
-   // то в момент вызова Invoke   Sub не может быть вызван
-   // на  Sub кинем исключение а UnSub может вызыватся сколько угодно раз
-   // в вызваном Invoke
+  // Setlength(A, FCount);
+  // Move(FArr[0], A[0], Sizeof(TAwProc) * FCount);
+  // for i := Length(A) - 1 downto 0 do
+  // A[i]();
+  // во время выпонения   A[i]();
+  // FArr может поменятся сколько угодно раз как и добавление так и удаление
+  // поэтому после каждого вызова нужно заново обращатся к FArr и проходить по списку
+  // пока не пройдем все процедуры
+  // т.к этот объект используется только для события удаления
+  // то в момент вызова Invoke   Sub не может быть вызван
+  // на  Sub кинем исключение а UnSub может вызыватся сколько угодно раз
+  // в вызваном Invoke
 
-   if FFlagInvokeLock <> 0 then
-   raise Exception.CreateResFmt(@RsTAwHandleBroadcast_Invoke,[]);
-   inc(FFlagInvokeLock);
-   try
-       FFlagChangedArr:=false;
-       IsBreaker:= false;
-       Map:=TDictionary<TAwProc,Boolean>.Create(FCount);
-       try
-          while (FCount > 0) and  not IsBreaker do
+  if FFlagInvokeLock <> 0 then
+    raise Exception.CreateResFmt(@RsTAwHandleBroadcast_Invoke, []);
+  inc(FFlagInvokeLock);
+  try
+    FFlagChangedArr := false;
+    IsBreaker := false;
+    Map := TDictionary<TAwProc, boolean>.Create(FCount);
+    try
+      while (FCount > 0) and not IsBreaker do
+      begin
+        IsBreaker := true;
+        for i := 0 to FCount - 1 do
+          if Map.TryAdd(FArr[i], false) then
           begin
-            IsBreaker:=true;
-            for I := 0 to FCount - 1 do
-             if Map.TryAdd(FArr[i],false) then
-             begin
-              Proc:= FArr[i];
-              Proc();
-              if FFlagChangedArr then
-              begin
-                FFlagChangedArr:=false;
-                IsBreaker:=false;
-                break;
-              end;
-             end;
+            Proc := FArr[i];
+            Proc();
+            if FFlagChangedArr then
+            begin
+              FFlagChangedArr := false;
+              IsBreaker := false;
+              break;
+            end;
           end;
-       finally
-         FFlagChangedArr:=false;
-         Map.Free;
-       end;
-   finally
-     dec(FFlagInvokeLock);
-   end;
-
-
+      end;
+    finally
+      FFlagChangedArr := false;
+      Map.Free;
+    end;
+  finally
+    dec(FFlagInvokeLock);
+  end;
 
 end;
 
@@ -180,9 +209,9 @@ begin
     (IndexOf(Event) >= 0) then
     exit;
   if FFlagInvokeLock <> 0 then
-  raise Exception.CreateResFmt(@RsTAwHandleBroadcast_Sub,[]);
+    raise Exception.CreateResFmt(@RsTAwHandleBroadcast_Sub, []);
   CheckGrow;
-  FFlagChangedArr:=true;
+  FFlagChangedArr := true;
   FArr[FCount] := Event;
   inc(FCount);
 end;
@@ -207,8 +236,8 @@ end;
 
 procedure TAwHandleBroadcastDestroy.Delete(Index: Integer);
 begin
-  FFlagChangedArr:=true;
-  Dec(FCount);
+  FFlagChangedArr := true;
+  dec(FCount);
   if Index < FCount then
     System.Move(FArr[Index + 1], FArr[Index],
       Sizeof(TAwProc) * (FCount - Index));

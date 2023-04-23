@@ -24,27 +24,29 @@ uses
   // взбалтывание контрола
   IAwAnimateShake = interface;
   TAwAnimateShake = class;
-   {
-  // перемешение контрола
-  IAwAnimateMove = interface;
-  TAwAnimateMove = class;
 
   // мягкий шарик измениние размера контрола
   IAwAnimateBall = interface;
   TAwAnimateBall = class;
+   
+  // перемешение контрола
+  IAwAnimateMove = interface;
+  TAwAnimateMove = class;
+
+
 
   // транспарент
   IAwAnimateAlfa = interface;
   TAwAnimateAlfa = class;
-  }
+
   {$REGION 'FACTORY'}
   AwFactoryEffects = class (AwFactoryBase)
     public
     class function Custom: IAwAnimateCustom; static;
     class function Shake(): IAwAnimateShake; static;
-   // class function Move(): IAwAnimateMove; static;
-   // class function Ball(): IAwAnimateBall; static;
-   // class function Alfa(): IAwAnimateAlfa; static;
+    class function Move(): IAwAnimateMove; static;
+    class function Ball(): IAwAnimateBall; static;
+    class function Alfa(): IAwAnimateAlfa; static;
   end;
  {$ENDREGION}
 
@@ -89,7 +91,15 @@ uses
   TAwAnimateCustom = class(TAwAnimateBase, IAwAnimateCustom)end;
   {$ENDREGION}
 
-  {$REGION 'ABSTRACT BOUNDS'}
+
+  ////////////////////////////////////////////////////////////////////////////
+  ///                                                                      ///
+  ///                                                                      ///
+  ///                           BOUNDS ABSTRACT                            ///
+  ///                                                                      ///
+  ///                                                                      ///
+  ////////////////////////////////////////////////////////////////////////////
+  {$REGION 'BOUNDS ABSTRACT'}
   // параметры Source которые отвечают за измениние Bounds у контрола
   TAwOptionBounds = class (TAwOptionBase)
    private
@@ -120,11 +130,10 @@ uses
   end;
  {$ENDREGION}
 
-
   ////////////////////////////////////////////////////////////////////////////
   ///                                                                      ///
   ///                                                                      ///
-  ///                              SHAKE                                   ///
+  ///                           BOUNDS SHAKE                               ///
   ///                                                                      ///
   ///                                                                      ///
   ////////////////////////////////////////////////////////////////////////////
@@ -154,7 +163,7 @@ uses
     property Option: TAwOptionShake read OptionGet;
   end;
 
-  TAwAnimateShake = class(TAwAnimateBoundsRecoveryRect, IAwAnimateShake)
+  TAwAnimateShake = class sealed(TAwAnimateBoundsRecoveryRect, IAwAnimateShake)
   private
     function OptionGet:TAwOptionShake;
   protected
@@ -166,172 +175,159 @@ uses
     class function OptionClassGet:TawOptionClass;override;
   end;
  {$ENDREGION}
-  {
-   // параметры анимации мягкого мячика
-  PAmAnimateBallParam =^TAmAnimateShakeParam;
-  TAmAnimateBallParam = record
-   private
-     procedure EffectToRef;
-   public
-     [unsafe]Source: IAwSourceBounds;
-     Delay: Cardinal;
-     DeltaHorz: Single;
-     DeltaVert: Single;
-     TimeHorz: Single;
-     TimeVert: Single;
-     FuncRefHorz: TAwCalcRef;
-     FuncRefVert: TAwCalcRef;
-     EffectMainHorz:TAwEnumEffectMain;
-     EffectMainVert:TAwEnumEffectMain;
-     EffectModificatorHorz:TAwEnumEffectMode;
-     EffectModificatorVert:TAwEnumEffectMode;
-     procedure Clear;
-     procedure Default;
-     procedure Random;
-     function IsValid:boolean;
+
+  ////////////////////////////////////////////////////////////////////////////
+  ///                                                                      ///
+  ///                                                                      ///
+  ///                           BOUNDS BALL                                ///
+  ///                                                                      ///
+  ///                                                                      ///
+  ////////////////////////////////////////////////////////////////////////////
+  {$REGION 'BALL'}
+  // параметры анимации мягкого мячика
+  TAwOptionBall = class (TAwOptionBounds)
+    private
+       FEffect:TAwEffectPoint;
+       function EffectGet: PAwEffectPoint;
+     protected
+       procedure Init;override;
+       procedure Clear;override;
+     public
+       property Effect: PAwEffectPoint read EffectGet;
+       function IsValid:boolean; override;
   end;
 
   IAwAnimateBall = interface(IAwAnimateBase)
-   //private
-    function ParamGet:PAmAnimateBallParam;
-   //public
-    property Param: PAmAnimateBallParam read ParamGet;
+    function OptionGet:TAwOptionBall;
     procedure SetParam(ASource: IAwSourceBounds; ADelay: Cardinal;
-      DeltaW, DeltaH, TimeW, TimeH: Single);
+      DeltaX, DeltaY, CountRepeatX, CountRepeatY: Single);
+    property Option: TAwOptionBall read OptionGet;
   end;
 
-  TAwAnimateBall = class(TAwAnimateBoundsRecoveryRect, IAwAnimateBall)
+  TAwAnimateBall = class sealed(TAwAnimateBoundsRecoveryRect, IAwAnimateBall)
   private
-    FParam:TAmAnimateBallParam;
-    function ParamGet:PAmAnimateBallParam;
+    function OptionGet:TAwOptionBall;
   protected
     procedure EventProcess; override;
-    function IsValidParam: boolean; override;
   public
-    property Param: PAmAnimateBallParam read ParamGet;
+    property Option: TAwOptionBall read OptionGet;
     procedure SetParam(ASource: IAwSourceBounds; ADelay: Cardinal;
-      DeltaW, DeltaH, TimeW, TimeH: Single);
-    constructor Create; override;
-    destructor Destroy; override;
+      DeltaX, DeltaY, CountRepeatX, CountRepeatY: Single);
+    class function OptionClassGet:TawOptionClass;override;
   end;
 
+  {$ENDREGION}
 
 
-   // параметры анимации перемещения
-   // заполнить  (FuncRef или (Line,Mode))
-  PAmAnimateMoveParam =^TAmAnimateMoveParam;
-  TAmAnimateMoveParam = record
-   private
-     procedure EffectToRef;
-   public
-     [unsafe]Source: IAwSourceBounds;
-     Delay: Cardinal;
-     NewBounds:TAmAnimateBounds;
-     FuncRef: TAmAnimateBoundsFuncRef;
-     EffectMain:TAmAnimateBoundsEffectMain;
-     EffectModificator:TAmAnimateBoundsEffectModificator;
-     procedure Clear;
-     procedure Default;
-     procedure Random;
-     function IsValid:boolean;
+  ////////////////////////////////////////////////////////////////////////////
+  ///                                                                      ///
+  ///                                                                      ///
+  ///                           BOUNDS MOVE                                ///
+  ///                                                                      ///
+  ///                                                                      ///
+  ////////////////////////////////////////////////////////////////////////////
+  {$REGION 'MOVE'}
+  // параметры анимации перемещения
+  TAwOptionMove = class (TAwOptionBounds)
+    private
+       FEffect:TAwEffectBounds;
+       FBounds:TAwBounds;
+       function EffectGet: PAwEffectBounds;
+       function BoundsGet: PAwBounds;
+     protected
+       procedure Init;override;
+       procedure Clear;override;
+     public
+       property Bounds: PAwBounds read BoundsGet;
+       property Effect: PAwEffectBounds read EffectGet;
+       function IsValid:boolean; override;
   end;
 
   IAwAnimateMove = interface(IAwAnimateBase)
-   //private
-    function ParamGet:PAmAnimateMoveParam;
-   //public
-    //ParamMode дает больше возможностей для настройки анимаций
-    // чем  SetParamMode и SetParamCustom
-    property Param: PAmAnimateMoveParam read ParamGet;
-    procedure SetParamMode(ASource: IAwSourceBounds; ADelay: Cardinal;
+    function OptionGet:TAwOptionMove;
+    procedure SetParam(ASource: IAwSourceBounds; ADelay: Cardinal;
       NewLeft, NewTop, NewWidth, NewHeight: Single;
-      TypLine: TAwEnumEffectMain; TypeMode: TAwEnumEffectMode);
-    procedure SetParamCustom(ASource: IAwSourceBounds; ADelay: Cardinal;
-      NewLeft, NewTop, NewWidth, NewHeight: Single;
-      Func: TAwCalcRef);
+      EffectMain: TAwEnumEffectMain; EffectMode: TAwEnumEffectMode);
+    property Option: TAwOptionMove read OptionGet;
   end;
 
-  TAwAnimateMove = class(TAwAnimateBoundsCustom, IAwAnimateMove)
-  private
-    FParam:TAmAnimateMoveParam;
-    function ParamGet:PAmAnimateMoveParam;
+  TAwAnimateMove = class sealed (TAwAnimateBoundsCustom, IAwAnimateMove)
+  private     
+    function OptionGet:TAwOptionMove;
   protected
     procedure EventProcess; override;
-    procedure EventFinishLast; override;
-    function IsValidParam: boolean; override;
   public
-    property Param: PAmAnimateMoveParam read ParamGet;
-    procedure SetParamMode(ASource: IAwSourceBounds; ADelay: Cardinal;
+    property Option: TAwOptionMove read OptionGet;
+    procedure SetParam(ASource: IAwSourceBounds; ADelay: Cardinal;
       NewLeft, NewTop, NewWidth, NewHeight: Single;
-      TypLine: TAwEnumEffectMain; TypeMode: TAwEnumEffectMode);
-    procedure SetParamCustom(ASource: IAwSourceBounds; ADelay: Cardinal;
-      NewLeft, NewTop, NewWidth, NewHeight: Single;
-      Func: TAwCalcRef);
-    constructor Create; override;
-    destructor Destroy; override;
+      EffectMain: TAwEnumEffectMain; EffectMode: TAwEnumEffectMode);
+    class function OptionClassGet:TawOptionClass;override;
   end;
 
-  //TAwAnimateSourceAlfaCustom
+  {$ENDREGION}
 
-  TAwAnimateSourceAlfaCustom = class abstract(TAwAnimateBase)
+
+  ////////////////////////////////////////////////////////////////////////////
+  ///                                                                      ///
+  ///                                                                      ///
+  ///                           ALFA ABSTRACT                              ///
+  ///                                                                      ///
+  ///                                                                      ///
+  ////////////////////////////////////////////////////////////////////////////
+ {$REGION 'ABSTRACT ALFA'}
+
+  // параметры Source которые отвечают за измениние TransparentLevel у контрола
+  TAwOptionAlfa = class (TAwOptionBase)
+   private
+    FEffect:TAwEffectSide;
+    function SourceGet: IAwSourceAlfa;
+    procedure SourceSet(const Value: IAwSourceAlfa);
+    function EffectGet: PAwEffectSide;
    protected
-     [unsafe]FLocalSource: IAwSourceAlfa;
+    procedure Init; override;
+    procedure Clear; override;
+   public
+    property Source: IAwSourceAlfa read SourceGet write SourceSet;
+    property Effect: PAwEffectSide read EffectGet;
+    function IsValid: boolean; override;
+  end;
+
+  TAwAnimateAlfaCustom = class abstract(TAwAnimateOpt)
+   private
+     function OptionGet:TAwOptionAlfa;
+   protected
      FSaveAlfa:byte;
-     function CheckLocalSource:boolean;
-     procedure SourceChanged;override;
      function IsValidParam: boolean; override;
-      procedure EventStartFerst; override;
-     procedure EventFinishLast; override;
+     property Option: TAwOptionAlfa read OptionGet;
    public
      constructor Create; override;
      destructor Destroy; override;
   end;
 
-   // параметры анимации прозрачности
-  PAmAnimateAlfaParam =^TAmAnimateAlfaParam;
-  TAmAnimateAlfaParam = record
-   private
-     procedure EffectToRef(IsCheck:boolean);
-   public
-     [unsafe]Source: IAwSourceAlfa;
-     Delay: Cardinal;
-     LvlFrom, LvlTo: Byte;
-     FuncRef: TAwCalcRef;
-     EffectMain:TAwEnumEffectMain;
-     EffectModificator:TAwEnumEffectMode;
-     procedure Clear;
-     procedure Default;
-     procedure Random;
-     function IsValid:boolean;
-  end;
+ {$ENDREGION}
 
-
+  ////////////////////////////////////////////////////////////////////////////
+  ///                                                                      ///
+  ///                                                                      ///
+  ///                              ALFA                                    ///
+  ///                                                                      ///
+  ///                                                                      ///
+  ////////////////////////////////////////////////////////////////////////////
+ {$REGION 'ALFA'}
   IAwAnimateAlfa = interface(IAwAnimateBase)
-    //private
-    function ParamGet:PAmAnimateAlfaParam;
-    //public
-    property Param: PAmAnimateAlfaParam read ParamGet;
-    procedure SetParam(ASource: IAwSourceAlfa; ADelay: Cardinal;
-      LvlFrom, LvlTo: Byte);
+    function OptionGet:TAwOptionAlfa;
+    property Option: TAwOptionAlfa read OptionGet;
+    procedure SetParam(ASource: IAwSourceAlfa; ADelay: Cardinal; DeltaDirection: Integer);
   end;
-
-  TAwAnimateAlfa = class(TAwAnimateSourceAlfaCustom, IAwAnimateAlfa)
-  private
-    FParam:TAmAnimateAlfaParam;
-    function ParamGet:PAmAnimateAlfaParam;
+  TAwAnimateAlfa = class sealed (TAwAnimateAlfaCustom, IAwAnimateAlfa)
   protected
     procedure EventProcess; override;
-    procedure EventFinishLast; override;
-    function IsValidParam: boolean; override;
   public
-    property Param: PAmAnimateAlfaParam read ParamGet;
-    procedure SetParam(ASource: IAwSourceAlfa; ADelay: Cardinal;
-      LvlFrom, LvlTo: Byte);
-    constructor Create; override;
-    destructor Destroy; override;
+    procedure SetParam(ASource: IAwSourceAlfa; ADelay: Cardinal; DeltaDirection: Integer);
+    property Option;
+    class function OptionClassGet:TawOptionClass;override;
   end;
-
-  }
+  {$ENDREGION}
 
 implementation
 
@@ -347,29 +343,31 @@ begin
     .AsObject as TAwAnimateShake);
 end;
 
-  {
-class function AwFactoryEffects.Move: IAwAnimateMove;
-begin
-  Result := IAwAnimateMove(Base(TAwAnimateMove)
-    .AsObject as TAwAnimateMove);
-end;
-
 class function AwFactoryEffects.Ball(): IAwAnimateBall;
 begin
   Result := IAwAnimateBall(Base(TAwAnimateBall)
     .AsObject as TAwAnimateBall);
 end;
 
+ 
+class function AwFactoryEffects.Move: IAwAnimateMove;
+begin
+  Result := IAwAnimateMove(Base(TAwAnimateMove)
+    .AsObject as TAwAnimateMove);
+end;
+
+
+
 class function AwFactoryEffects.Alfa(): IAwAnimateAlfa;
 begin
   Result := IAwAnimateAlfa(Base(TAwAnimateAlfa)
     .AsObject as TAwAnimateAlfa);
-end; }
+end;
 
 
 
 
-
+{$REGION 'BOUNDS ABSTRACT'}
 { TAwOptionBounds }
 
 function TAwOptionBounds.SourceGet: IAwSourceBounds;
@@ -415,9 +413,9 @@ begin
   or not Option.Source.SetBounds(FSaveRect)  then
     TerminateAndCancel;
 end;
+{$ENDREGION}
 
-
-
+{$REGION 'SHAKE'}
 { TAwOptionShake }
 
 procedure TAwOptionShake.Clear;
@@ -494,488 +492,337 @@ begin
   TerminateAndCancel;
 end;
 
+{$ENDREGION}
 
 
 
 
-   (*
-{ TAmAnimateBallParam }
+{$REGION 'BALL'}
 
-procedure TAmAnimateBallParam.Clear;
-begin
-  Source:=nil;
-  FuncRefHorz:=nil;
-  FuncRefVert:=nil;
-  fillchar(self,sizeof(self),0);
-end;
+ { TAwOptionBall }
 
-procedure TAmAnimateBallParam.Default;
-begin
-   Clear;
-   Delay:= 500;
-   DeltaHorz:=5;
-   DeltaVert:=5;
-   TimeHorz:=1;
-   TimeVert:=1;
-end;
-
-procedure TAmAnimateBallParam.EffectToRef;
-begin
-  if not Assigned(FuncRefHorz) then
-    FuncRefHorz:= TAwMath.EnumToFuncRef(EffectMainHorz,EffectModificatorHorz);
-  if not Assigned(FuncRefVert) then
-    FuncRefVert:= TAwMath.EnumToFuncRef(EffectMainVert,EffectModificatorVert);
-end;
-
-function TAmAnimateBallParam.IsValid: boolean;
-begin
-   EffectToRef;
-   Result:=
-   ((DeltaHorz <> 0) and (TimeHorz <> 0) and Assigned(FuncRefHorz) ) or
-   ((DeltaVert <> 0) and (TimeVert <> 0) and Assigned(FuncRefVert) );
-   Result:= Result and (Source<>nil) and (Delay>0);
-end;
-
-procedure TAmAnimateBallParam.Random;
-var Count:integer;
-begin
-   Clear;
-   DeltaHorz:=Math.RandomRange(1,15);
-   DeltaVert:=Math.RandomRange(1,15);
-   TimeHorz:=1;
-   TimeVert:=1;
-   Delay:= Math.RandomRange(200,1000);
-
-    Count:= Integer(System.High(TAwEnumEffectMain))+1;
-
-    EffectMainHorz:= TAwEnumEffectMain(Math.RandomRange(0,Count));
-    EffectMainVert:= TAwEnumEffectMain(Math.RandomRange(0,Count));
-
-    Count:= Integer(System.High(TAwEnumEffectMode))+1;
-
-    EffectModificatorHorz:= TAwEnumEffectMode(Math.RandomRange(0,Count));
-    EffectModificatorVert:= TAwEnumEffectMode(Math.RandomRange(0,Count));
-end;
-
-
-{ TAmAnimateBall }
-
-constructor TAwAnimateBall.Create;
+procedure TAwOptionBall.Clear;
 begin
   inherited;
-  FParam.Default;
+   FEffect.Clear;
 end;
 
-destructor TAwAnimateBall.Destroy;
+function TAwOptionBall.EffectGet: PAwEffectPoint;
 begin
-  FParam.Clear;
+   Result:= @FEffect;
+end;
+
+procedure TAwOptionBall.Init;
+begin
   inherited;
+  FEffect.Clear;
 end;
 
-function TAwAnimateBall.ParamGet:PAmAnimateBallParam;
+function TAwOptionBall.IsValid: boolean;
 begin
-   Result:= @FParam;
+  Result:=  inherited IsValid and FEffect.IsValid;
 end;
 
-function TAwAnimateBall.IsValidParam: boolean;
+
+{ TAwAnimateBall }
+
+class function TAwAnimateBall.OptionClassGet: TawOptionClass;
 begin
-  Result := inherited IsValidParam and FParam.IsValid;
-  FParam.Source:=nil;
+  Result := TAwOptionBall;
+end;
+
+function TAwAnimateBall.OptionGet: TAwOptionBall;
+begin
+  Result:= inherited Option as TAwOptionBall;
 end;
 
 procedure TAwAnimateBall.SetParam(ASource: IAwSourceBounds; ADelay: Cardinal;
-      DeltaW, DeltaH, TimeW, TimeH: Single);
+  DeltaX, DeltaY, CountRepeatX, CountRepeatY: Single);
 begin
-  FParam.Source:= nil;
-  FParam.Delay:=  ADelay;
-  FParam.DeltaHorz:= DeltaW;
-  FParam.DeltaVert:= DeltaH;
-  FParam.TimeHorz:=  TimeW;
-  FParam.TimeVert:=  TimeH;
-  Source:= ASource;
-  Delay := ADelay;
+  Option.Source:= ASource;
+  Option.Delay:=  ADelay;
+  Option.Effect.Default;
+  Option.Effect.X.Count:= CountRepeatX;
+  Option.Effect.Y.Count:= CountRepeatY;
+  Option.Effect.X.Delta:=DeltaX;
+  Option.Effect.Y.Delta :=DeltaY;
 end;
 
 procedure TAwAnimateBall.EventProcess;
 var
-  Bar: Real;
-  Bounds: TAmAnimateBounds;
+  Bar,Bar2: Real;
+  Bounds: TAwBounds;
   Value:Single;
 begin
   inherited;
-  if not CheckLocalSource then
+  if not InProcessCheckSource then
    exit;
   Bar := Progress;
   Bounds.Rect:= FSaveRect;
 
   if Bar < 1 then
   begin
-    if FParam.DeltaHorz <> 0 then
+    if Option.Effect.X.Delta <> 0 then
     begin
-      Value := TAwMath.SwingTime(FParam.TimeHorz, FParam.DeltaHorz, Bar) / 2;
+      Bar2:=Option.Effect.X.Effect.Calc(Bar);
+     // Bar2:=Bar;
+      Value := TAwMath.SwingTime(Option.Effect.X.Count, Option.Effect.X.Delta, Bar2) / 2;
       Bounds.Left := Bounds.Left + Value;
       Bounds.Width := Bounds.Width - Value * 2;
     end;
-    if FParam.DeltaVert <> 0 then
+    if Option.Effect.Y.Delta <> 0 then
     begin
-      Value := TAwMath.SwingTime(FParam.TimeVert, FParam.DeltaVert, Bar) / 2;
+      Bar2:=Option.Effect.Y.Effect.Calc(Bar);
+      Value :=  TAwMath.SwingTime(Option.Effect.Y.Count, Option.Effect.Y.Delta, Bar2) / 2;
       Bounds.Top := Bounds.Top + Value;
       Bounds.Height := Bounds.Height - Value * 2;
     end;
   end;
- if  not FLocalSource.SetBounds(Bounds.Rect) then
+  if  not Option.Source.SetBounds(Bounds.Rect) then
   TerminateAndCancel;
 end;
 
 
+{$ENDREGION}
 
 
 
+{$REGION 'MOVE'}
 
-{ TAmAnimateMoveParam }
+{ TAwOptionMove }
 
-procedure TAmAnimateMoveParam.Clear;
+function TAwOptionMove.BoundsGet: PAwBounds;
 begin
-  Source:=nil;
-  NewBounds.Clear;
-  FuncRef.Clear;
-  EffectMain.Clear;
-  EffectModificator.Clear;
-  fillchar(self,sizeof(self),0);
+   Result:= @FBounds;
 end;
 
-procedure TAmAnimateMoveParam.Default;
+procedure TAwOptionMove.Clear;
 begin
-   Clear;
-   Delay:=500;
+  inherited Clear;
+  FEffect.Clear;
+  FBounds.Clear;
 end;
 
-procedure TAmAnimateMoveParam.EffectToRef;
+function TAwOptionMove.EffectGet: PAwEffectBounds;
 begin
-   if not Assigned(FuncRef.Left) then
-    FuncRef.Left:= TAwMath.EnumToFuncRef(EffectMain.Left,EffectModificator.Left);
-   if not Assigned(FuncRef.Top) then
-    FuncRef.Top:= TAwMath.EnumToFuncRef(EffectMain.Top,EffectModificator.Top);
-   if not Assigned(FuncRef.Width) then
-    FuncRef.Width:= TAwMath.EnumToFuncRef(EffectMain.Width,EffectModificator.Width);
-   if not Assigned(FuncRef.Height) then
-    FuncRef.Height:= TAwMath.EnumToFuncRef(EffectMain.Height,EffectModificator.Height);
+   Result:= @FEffect;
 end;
 
-function TAmAnimateMoveParam.IsValid: boolean;
-begin
-     EffectToRef;
-     Result:= FuncRef.IsValid;
-end;
-
-procedure TAmAnimateMoveParam.Random;
-begin
-   Clear;
-   Delay:= Math.RandomRange(200,1000);
-   EffectMain.Random;
-   EffectModificator.Random;
-end;
-
-
-
-{ TAmAnimateMove }
-
-constructor TAwAnimateMove.Create;
+procedure TAwOptionMove.Init;
 begin
   inherited;
-  FParam.Default;
+  FEffect.Clear;
+  FBounds.Clear;
 end;
 
-destructor TAwAnimateMove.Destroy;
+function TAwOptionMove.IsValid: boolean;
 begin
-  FParam.Clear;
-  inherited;
-end;
-
-function TAwAnimateMove.ParamGet: PAmAnimateMoveParam;
-begin
-    Result:= @FParam;
-end;
-
-function TAwAnimateMove.IsValidParam: boolean;
-begin
-  Source:= FParam.Source;
-  Delay:= FParam.Delay;
-  Result := FParam.IsValid and  inherited IsValidParam;
+  Result:= inherited IsValid 
+  and FEffect.IsValid 
+  and FBounds.isValid;
 end;
 
 
-procedure TAwAnimateMove.SetParamCustom(ASource: IAwSourceBounds;
-  ADelay: Cardinal; NewLeft, NewTop, NewWidth, NewHeight: Single;
-  Func: TAwCalcRef);
-begin
-  FParam.Source:=ASource;
-  FParam.Delay:=ADelay;
-  FParam.NewBounds.Left:=   NewLeft;
-  FParam.NewBounds.Top:=    NewTop;
-  FParam.NewBounds.Width:=  NewWidth;
-  FParam.NewBounds.Height:= NewHeight;
 
-  FParam.FuncRef.Left:=  Func;
-  FParam.FuncRef.Top:=  Func;
-  FParam.FuncRef.Width:=  Func;
-  FParam.FuncRef.Height:=  Func;
+{ TAwAnimateMove }
+
+class function TAwAnimateMove.OptionClassGet: TawOptionClass;
+begin
+   Result:= TAwOptionMove;
 end;
 
-procedure TAwAnimateMove.SetParamMode(ASource: IAwSourceBounds;
-  ADelay: Cardinal; NewLeft, NewTop, NewWidth, NewHeight: Single;
-  TypLine: TAwEnumEffectMain; TypeMode: TAwEnumEffectMode);
+function TAwAnimateMove.OptionGet: TAwOptionMove;
 begin
-  SetParamCustom(ASource, ADelay, NewLeft, NewTop, NewWidth, NewHeight,
-    TAwMath.EnumToFuncRef(TypLine, TypeMode));
+   Result:= inherited  Option as TAwOptionMove;
 end;
 
-procedure TAwAnimateMove.EventFinishLast;
-var FCurRect:TRectF;
-begin
-  inherited EventFinishLast;
-  if not CheckLocalSource or not FLocalSource.GetBounds(FCurRect) then
-    TerminateAndCancel
-  else
-  begin
-      if FParam.NewBounds.Width<0 then
-      FParam.NewBounds.Width:= FCurRect.Width;
-      if FParam.NewBounds.Height<0 then
-      FParam.NewBounds.Height:= FCurRect.Height;
-      if not FLocalSource.SetBounds(FParam.NewBounds.Rect) then
-        TerminateAndCancel;
-  end;
+procedure TAwAnimateMove.SetParam(ASource: IAwSourceBounds; ADelay: Cardinal;
+  NewLeft, NewTop, NewWidth, NewHeight: Single; EffectMain: TAwEnumEffectMain;
+  EffectMode: TAwEnumEffectMode);
+begin   
+  Option.Source:= ASource;
+  Option.Delay:=  ADelay;
+  Option.Bounds.Left:=   NewLeft;
+  Option.Bounds.Top:=    NewTop;
+  Option.Bounds.Width:=  NewWidth;
+  Option.Bounds.Height:= NewHeight;
+  Option.Effect.EffectSet(EffectMain,EffectMode); 
 end;
 
 procedure TAwAnimateMove.EventProcess;
 var
   Bar: Real;
-  Bounds: TAmAnimateBounds;
-  APoint:TPointF;
+  NewBounds: TAwBounds;
   FCurRect:TRectF;
 begin
   inherited;
-  if not CheckLocalSource or not FLocalSource.GetBounds(FCurRect)  then
+  if not InProcessCheckSource 
+  or not Option.Source.GetBounds(FCurRect)  then
   begin
     self.TerminateAndCancel;
     exit;
   end;
 
-  Bar := Progress;
-
-  APoint:=TAwMath.MoveEffect(FSaveRect.Location,FParam.NewBounds.Rect.Location,Bar);
-  Bounds.Left:= APoint.X;
-  Bounds.Top:=  APoint.Y;
-  {
-  Left := TvCalculations.SwingToInteger(FSaveRect.Left, FNewRect.Left, Bar, FFunc);
-  Top := TvCalculations.SwingToInteger(FSaveRect.Top, FNewRect.Top, Bar, FFunc);
-
-  }
+  Bar := Progress; 
+  NewBounds.Location:= TAwMath.MoveEffect(FSaveRect.Location,
+                                          Option.Bounds.Location,
+                                          Bar,
+                                          Option.Effect.Left.Calc,
+                                          Option.Effect.Top.Calc);
 
 
-  if FParam.NewBounds.Width >= 0 then
-    Bounds.Width := TAwMath.SwingToSingle(FSaveRect.Width, FParam.NewBounds.Width,
-     Bar, FParam.FuncRef.Width)
+  if Option.Bounds.Width >= 0 then
+    NewBounds.Width := TAwMath.SwingToSingle(FSaveRect.Width, Option.Bounds.Width,
+     Bar, Option.Effect.Width.Calc)
   else
-    Bounds.Width := FCurRect.Width;
+    NewBounds.Width := FCurRect.Width;
 
-  if FParam.NewBounds.Height >= 0 then
-    Bounds.Height := TAwMath.SwingToSingle(FSaveRect.Height, FParam.NewBounds.Height,
-      Bar, FParam.FuncRef.Height)
+  if Option.Bounds.Height >= 0 then
+    NewBounds.Height := TAwMath.SwingToSingle(FSaveRect.Height, Option.Bounds.Height,
+      Bar, Option.Effect.Height.Calc)
   else
-    Bounds.Height := FCurRect.Height;
+    NewBounds.Height := FCurRect.Height;
 
 
-  if  not FLocalSource.SetBounds(Bounds.Rect) then
+  if  not Option.Source.SetBounds(NewBounds.Rect) then
    TerminateAndCancel;
 end;
+{$ENDREGION}
 
 
-
-
-
-
-
-
-
-
-
-
-
-{ TAmAnimateLocalSourceAlfa }
-
-constructor TAwAnimateSourceAlfaCustom.Create;
+{$REGION 'ABSTRACT ALFA'}
+{ TAwOptionAlfa }
+procedure TAwOptionAlfa.Init;
 begin
-   inherited;
-   FLocalSource:=nil;
-   FSaveAlfa:=0;
+  inherited Init;
+  FEffect.Clear;
 end;
 
-destructor TAwAnimateSourceAlfaCustom.Destroy;
+procedure TAwOptionAlfa.Clear;
 begin
-   FLocalSource:=nil;
-   inherited;
+  inherited Clear;
+   FEffect.Clear;
 end;
 
-procedure TAwAnimateSourceAlfaCustom.SourceChanged;
+function TAwOptionAlfa.EffectGet: PAwEffectSide;
 begin
-   inherited;
-   FLocalSource:=nil;
-   if (Source = nil) or not Source.IsValid
-   or not  Supports(Source,IAwSourceAlfa,FLocalSource) then
-    TerminateAndCancel;
-end;
-function TAwAnimateSourceAlfaCustom.CheckLocalSource: boolean;
-begin
-   Result:= (FLocalSource <> nil) and FLocalSource.IsValid;
-   if not Result then
-    TerminateAndCancel;
+  Result:= @FEffect;
 end;
 
-function TAwAnimateSourceAlfaCustom.IsValidParam: boolean;
+function TAwOptionAlfa.IsValid: boolean;
 begin
-  FLocalSource:=nil;
-  Result := inherited IsValidParam
-  and (Source <> nil)and Source.IsValid
-  and Supports(Source,IAwSourceAlfa,FLocalSource);
-  if Result then
-    FSaveAlfa:= FLocalSource.GetAlfa;
+ Result:= inherited IsValid and FEffect.IsValid;
 end;
 
-procedure TAwAnimateSourceAlfaCustom.EventStartFerst;
+function TAwOptionAlfa.SourceGet: IAwSourceAlfa;
+begin
+  Result:= inherited Source as IAwSourceAlfa;
+end;
+
+procedure TAwOptionAlfa.SourceSet(const Value: IAwSourceAlfa);
+begin
+  inherited Source := Value;
+end;
+
+
+{ TAwAnimateAlfaCustom }
+
+constructor TAwAnimateAlfaCustom.Create;
 begin
   inherited;
-  CheckLocalSource;
+  FSaveAlfa:=0;
 end;
 
-procedure TAwAnimateSourceAlfaCustom.EventFinishLast;
+destructor TAwAnimateAlfaCustom.Destroy;
 begin
-  inherited;
-  if not CheckLocalSource then
-    TerminateAndCancel;
-end;
 
-
-
-
-{ TAmAnimateAlfaParam }
-
-procedure TAmAnimateAlfaParam.Clear;
-begin
-    Source:=nil;
-    FuncRef:= nil;
-    fillchar(self,sizeof(self),0);
-end;
-
-procedure TAmAnimateAlfaParam.Default;
-begin
-   Clear;
-   LvlFrom:=100;
-   LvlTo:=255;
-end;
-
-procedure TAmAnimateAlfaParam.EffectToRef(IsCheck:boolean);
-begin
-   if not IsCheck or  not Assigned(FuncRef) then
-    FuncRef:= TAwMath.EnumToFuncRef(EffectMain,EffectModificator);
-end;
-
-function TAmAnimateAlfaParam.IsValid: boolean;
-begin
-  EffectToRef(true);
-  Result:= (LvlFrom <> LvlTo)
-  and  (Source <> nil)
-  and  (Delay > 0)
-  and Assigned(FuncRef);
-end;
-
-procedure TAmAnimateAlfaParam.Random;
-var Count:integer;
-begin
-   Clear;
-   LvlFrom:=Math.RandomRange(1,255);
-   LvlTo:=Math.RandomRange(1,255);
-   Delay:= Math.RandomRange(200,1000);
-   Count:= Integer(System.High(TAwEnumEffectMain))+1;
-   EffectMain:= TAwEnumEffectMain(Math.RandomRange(0,Count));
-   Count:= Integer(System.High(TAwEnumEffectMode))+1;
-   EffectModificator:= TAwEnumEffectMode(Math.RandomRange(0,Count));
-   EffectToRef(false);
-end;
-
-
-
-
-{ TAmAnimateAlfa }
-
-constructor TAwAnimateAlfa.Create;
-begin
-  inherited;
-  FParam.Default;
-end;
-
-destructor TAwAnimateAlfa.Destroy;
-begin
-  FParam.Clear;
   inherited;
 end;
 
-function TAwAnimateAlfa.ParamGet:PAmAnimateAlfaParam;
+function TAwAnimateAlfaCustom.IsValidParam: boolean;
 begin
-   Result:= @FParam;
+   Result:= inherited IsValidParam and  Option.Source.GetAlfa(FSaveAlfa);
 end;
 
-function TAwAnimateAlfa.IsValidParam: boolean;
+function TAwAnimateAlfaCustom.OptionGet: TAwOptionAlfa;
 begin
-  Source := FParam.Source;
-  Delay := FParam.Delay;
-  Result := FParam.IsValid and inherited IsValidParam;
+   Result:= inherited Option as TAwOptionAlfa;
 end;
 
-procedure TAwAnimateAlfa.SetParam(ASource: IAwSourceAlfa; ADelay: Cardinal;
-  LvlFrom, LvlTo: Byte);
+
+{ TAwAnimateAlfa }
+
+class function TAwAnimateAlfa.OptionClassGet: TawOptionClass;
 begin
-  FParam.Source:=   ASource;
-  FParam.Delay:=    ADelay;
-  FParam.LvlFrom := LvlFrom;
-  FParam.LvlTo :=   LvlTo;
+ Result:=  TAwOptionAlfa;
 end;
 
-procedure TAwAnimateAlfa.EventFinishLast;
+procedure TAwAnimateAlfa.SetParam(ASource: IAwSourceAlfa; ADelay: Cardinal; DeltaDirection: Integer);
 begin
-   inherited EventFinishLast;
-  if not CheckLocalSource or FLocalSource.SetAlfa(FParam.LvlTo) then
-    TerminateAndCancel;
+   Option.Source:=     ASource;
+   Option.Delay:=      ADelay;
+   Option.Effect.Default;
+   Option.Effect.Count:= 0.25;
+   Option.Effect.Delta:= DeltaDirection;
 end;
 
 procedure TAwAnimateAlfa.EventProcess;
 var
   Bar: Real;
-  Lvl: Byte;
+  Lvl:byte;
+  ValueDelta:integer;
+  ValueSing:Single;
+  function LocValueToByte(Value:Single):byte;
+  var I:Int64;
+  begin
+    I:= Round(Value);
+    if I > 255 then
+      I:=255
+    else if I < 0 then
+      I:=0;
+    Result:= byte(I);
+  end;
 begin
   inherited;
-  if not CheckLocalSource then
+  if not InProcessCheckSource then
    exit;
   Bar := Progress;
-  Lvl := Round(abs(FParam.LvlTo - FParam.LvlFrom) * Bar);
+  Lvl:= FSaveAlfa;
+  ValueDelta:= Round(Option.Effect.Delta);
+  if ValueDelta > 255 then
+   ValueDelta:= 255;
+  if ValueDelta < 255 then
+   ValueDelta:= -255;
+
+
+  if (Bar <= 1) and (ValueDelta <> 0) then
+  begin
+    Bar:=Option.Effect.Effect.Calc(Bar);
+    ValueSing := TAwMath.SwingTime(Option.Effect.Count, ValueDelta, Bar);
+    Lvl:= LocValueToByte(Lvl + ValueSing);
+    if  not Option.Source.SetAlfa(Lvl) then
+      TerminateAndCancel;
+  end;
+
+
+ {
+  inherited;
+  if not InProcessCheckSource then
+   exit;
+  Bar := Progress;
+  Lvl := Round(abs(Option.LevelFrom - FParam.LvlFrom) * Bar);
   if FParam.LvlTo > FParam.LvlFrom then
     Lvl := FParam.LvlFrom + Lvl
   else
     Lvl := FParam.LvlFrom - Lvl;
 
-  if not FLocalSource.SetAlfa(Lvl) then
+  if not Option.Source.SetAlfa(Lvl) then
    self.TerminateAndCancel;
+    }
 end;
 
 
-   *)
 
-
-
-
-
-
-
-
+{$ENDREGION}
 
 end.

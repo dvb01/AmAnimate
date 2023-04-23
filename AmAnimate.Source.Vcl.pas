@@ -8,6 +8,7 @@ uses
   System.Variants,
   System.Classes,
   System.Types,
+  Math,
   Vcl.Graphics,
   Vcl.Controls,
   Vcl.Forms,
@@ -16,8 +17,9 @@ uses
   AmAnimate.Engine,
   AmControlClasses;
 
+
  type
-  TAwSourceSimple = class (TInterfacedObject,IAwSourceBounds,IAwSourceAlfa,IAwSource)
+  TAwSourceSimple = class (TInterfacedObject,IAwSourceBounds,IAwSourceAlfa,IAwSource,IAwSourceEvent)
     private
      type
        TNotifer = class (TComponent)
@@ -31,26 +33,44 @@ uses
      var
      FNotifer:TNotifer;
      FControl:TWinControl;
-     FEvent:TAwHandleBroadcastDestroy;
+     FEventBroadcastDestroy:TAwHandleBroadcastDestroy;
+     FLockControl:integer;
     protected
+     procedure NotiferDestroyControl; virtual;
+     //IAwSource
+     function IsValid:boolean;
+     function ControlGet:Pointer;
+     function EventsGet:IAwSourceEvent;
      procedure SubOnDestroy(NotifyEvent:TAwProc);
      procedure UnSubOnDestroy(NotifyEvent:TAwProc);
-     function IsValid:boolean;
-     function GetBounds(var Rect:TRectF):boolean;
-     function SetBounds(const Rect:TRectF):boolean;
-     function GetAlfa:byte;
+
+     // IAwSourceEvent
+     procedure EventStartFerst(const Sender:IAwAnimateIntf); virtual;
+     procedure EventFinishLast(const Sender:IAwAnimateIntf);virtual;
+     procedure EventStart(const Sender:IAwAnimateIntf); virtual;
+     procedure EventFinish(const Sender:IAwAnimateIntf);virtual;
+     procedure EventProcess(const Sender:IAwAnimateIntf);virtual;
+
+     //IAwSourceBounds
+     function GetBounds(var Rect:TRectF):boolean;   virtual;
+     function SetBounds(const Rect:TRectF):boolean; virtual;
+
+     //IAwSourceAlfa
+     function GetAlfa(var Value:byte): boolean;
      function SetAlfa(const Value:byte):boolean;
-     function ControlGet:Pointer;
     public
+     property Control: TWinControl read FControl;
      constructor Create(AControl:TWinControl);
      destructor Destroy;override;
   end;
+
+
 
   TAwSourceVclCustom =  class(TComponent,IAwSourceBounds,IAwSource)
    private
     var
      FControl:TControl;
-     FEvent:TAwHandleBroadcastDestroy;
+     FEventBroadcastDestroy:TAwHandleBroadcastDestroy;
      procedure ControlSet(const Value:TControl);
      //IAwSource
      procedure SubOnDestroy(NotifyEvent:TAwProc);
@@ -61,10 +81,12 @@ uses
      procedure Notification(AComponent: TComponent; Operation: TOperation);override;
      //IAwSource
      function IsValid:boolean; virtual;
+     function EventsGet:IAwSourceEvent; virtual;
      //IAwSourceBounds
      function GetBounds(var Rect:TRectF):boolean;virtual;
      function SetBounds(const Rect:TRectF):boolean;virtual;
      property Control: TControl read FControl write ControlSet;
+
    public
      constructor Create(AOwner:TComponent); override;
      destructor Destroy;override;
@@ -89,7 +111,7 @@ uses
      function GetBounds(var Rect:TRectF):boolean;override;
      function SetBounds(const Rect:TRectF):boolean;override;
      //IAwSourceAlfa
-     function GetAlfa:byte;virtual;
+     function GetAlfa(var Value:byte): boolean; virtual;
      function SetAlfa(const Value:byte):boolean;virtual;
    public
      constructor Create(AOwner:TComponent); override;
@@ -110,7 +132,8 @@ begin
    FNotifer:=TNotifer.Create(nil);
    FNotifer.SourceSimple:= self;
    FControl:=AControl;
-   FEvent:=TAwHandleBroadcastDestroy.Create;
+   FLockControl:=0;
+   FEventBroadcastDestroy:=TAwHandleBroadcastDestroy.Create;
    if (FControl <> nil)
    and not (csDestroying in FControl.ComponentState) then
       FNotifer.FreeNotification(FControl)
@@ -120,29 +143,34 @@ end;
 
 destructor TAwSourceSimple.Destroy;
 begin
-  FEvent.Invoke;
+  FEventBroadcastDestroy.Invoke;
   if (FControl <> nil) then
   FNotifer.RemoveFreeNotification(FControl);
   FControl:=nil;
-  FreeAndNil(FEvent);
+  FreeAndNil(FEventBroadcastDestroy);
   FreeAndNil(FNotifer);
   inherited;
 end;
-
 
 function TAwSourceSimple.ControlGet: Pointer;
 begin
   Result:= FControl;
 end;
 
-function TAwSourceSimple.GetAlfa: byte;
+function TAwSourceSimple.GetAlfa(var Value:byte): boolean;
 begin
-   Result:=255;
+    Result:= IsValid;
+    if not Result then
+     exit;
+    Value:=  FControl.HelpTransparentLevel;
 end;
 
 function TAwSourceSimple.SetAlfa(const Value: byte): boolean;
 begin
-   Result:=false;
+    Result:= IsValid;
+    if not Result then
+     exit;
+     FControl.HelpTransparentLevel:=Value;
 end;
 
 function TAwSourceSimple.GetBounds(var Rect: TRectF): boolean;
@@ -174,16 +202,54 @@ begin
    and  FControl.HandleAllocated;
 end;
 
-
 procedure TAwSourceSimple.SubOnDestroy(NotifyEvent: TAwProc);
 begin
-   FEvent.Sub(NotifyEvent);
+   FEventBroadcastDestroy.Sub(NotifyEvent);
 end;
 
 procedure TAwSourceSimple.UnSubOnDestroy(NotifyEvent: TAwProc);
 begin
-  FEvent.UnSub(NotifyEvent);
+  FEventBroadcastDestroy.UnSub(NotifyEvent);
 end;
+
+function TAwSourceSimple.EventsGet:IAwSourceEvent;
+begin
+  Result:= self;
+end;
+
+procedure TAwSourceSimple.EventStartFerst(const Sender: IAwAnimateIntf);
+begin
+
+end;
+
+procedure TAwSourceSimple.EventFinishLast(const Sender: IAwAnimateIntf);
+begin
+end;
+
+procedure TAwSourceSimple.EventProcess(const Sender: IAwAnimateIntf);
+begin
+end;
+
+
+procedure TAwSourceSimple.EventStart(const Sender: IAwAnimateIntf);
+begin
+end;
+
+procedure TAwSourceSimple.EventFinish(const Sender: IAwAnimateIntf);
+begin
+end;
+
+procedure TAwSourceSimple.NotiferDestroyControl;
+begin
+  FControl:= nil;
+end;
+
+
+
+
+
+
+
 
 { TAwSourceSimple.TNotifer }
 
@@ -205,7 +271,7 @@ begin
   inherited;
   if (Operation = TOperation.opRemove)and (SourceSimple <> nil)
   and (SourceSimple.FControl = AComponent) then
-   SourceSimple.FControl:= nil;
+   SourceSimple.NotiferDestroyControl;
 end;
 
 { TAwSourceVclCustom }
@@ -214,16 +280,16 @@ constructor TAwSourceVclCustom.Create(AOwner: TComponent);
 begin
   inherited;
    FControl:=nil;
-   FEvent:=TAwHandleBroadcastDestroy.Create;
+   FEventBroadcastDestroy:=TAwHandleBroadcastDestroy.Create;
 end;
 
 destructor TAwSourceVclCustom.Destroy;
 begin
-   FEvent.Invoke;
+   FEventBroadcastDestroy.Invoke;
    if (FControl <> nil) then
     FControl.RemoveFreeNotification(self);
    FControl:=nil;
-   FreeAndNil(FEvent);
+   FreeAndNil(FEventBroadcastDestroy);
   inherited;
 end;
 
@@ -265,6 +331,11 @@ begin
     Rect.Height:= FControl.Height;
 end;
 
+function TAwSourceVclCustom.EventsGet:IAwSourceEvent;
+begin
+  Result:= nil;
+end;
+
 function TAwSourceVclCustom.IsValid: boolean;
 begin
    Result:= (FControl <> nil)
@@ -293,12 +364,12 @@ end;
 
 procedure TAwSourceVclCustom.SubOnDestroy(NotifyEvent: TAwProc);
 begin
-   FEvent.Sub(NotifyEvent);
+   FEventBroadcastDestroy.Sub(NotifyEvent);
 end;
 
 procedure TAwSourceVclCustom.UnSubOnDestroy(NotifyEvent: TAwProc);
 begin
-   FEvent.UnSub(NotifyEvent);
+   FEventBroadcastDestroy.UnSub(NotifyEvent);
 end;
 
 { TAwSourceWinControl }
@@ -330,11 +401,12 @@ begin
     Result:= inherited IsValid and Control.HandleAllocated;
 end;
 
-function TAwSourceWinControl.GetAlfa: byte;
+function TAwSourceWinControl.GetAlfa(var Value:byte): boolean;
 begin
-   if not IsValid then
-     exit(0);
-   Result:= Control.HelpTransparentLevel;
+   Result:= IsValid;
+   if not Result then
+     exit();
+   Value:= Control.HelpTransparentLevel;
 end;
 
 function TAwSourceWinControl.SetAlfa(const Value: byte): boolean;
@@ -358,6 +430,8 @@ end;
 
 type
  LocAwFactoryBase = class (AwFactoryBase)end;
+
+
 
 initialization
  LocAwFactoryBase.ProcApplicationProcessMessage:=Application.ProcessMessages;

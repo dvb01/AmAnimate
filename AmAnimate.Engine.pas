@@ -18,6 +18,7 @@ var
   AwAnimateNotBlockingMode: boolean = false;
 
 type
+
   TAwProcProcessMessage = procedure of object;
   TAwEventLockedApplication = procedure (IsLocked:boolean) of object;
   // абстрактый класс анимаций
@@ -33,6 +34,7 @@ type
   IAwAnimateBase = interface; // базовый интерфейс одной анимации
   TAwAnimateClass = class of TAwAnimateBase;
 
+
   // локальные настройки конкретной анимации
   // каждый класс должен сам себе создать если вообще это ему нужно
   // свои настойки,  параметры с которыми он будет работать
@@ -40,6 +42,7 @@ type
   TAwOptionClass = class of TAwOptionBase;
 
   TAwEvent = procedure(Animate: IAwAnimateBase) of object;
+  TAwEventRef = reference to procedure(Animate:IAwAnimateBase);
 
   // заглушка  пустая анимация
   IAwAnimateEmpty = interface;
@@ -128,7 +131,7 @@ type
   // базовый интерфейс одной анимации
 {$REGION 'Animate Base'}
 
-  IAwAnimateBase = interface(IInterface)
+  IAwAnimateBase = interface(IAwAnimateIntf)
     // private
     function ActiveGet: boolean;
     function IsDestroyingGet: boolean;
@@ -157,8 +160,11 @@ type
     procedure OnDestroyingSet(const Value: TAwEvent);
     function OnFinishLastGet: TAwEvent;
     procedure OnFinishLastSet(const Value: TAwEvent);
+    function OnFinishLastRefGet: TAwEventRef;
+    procedure OnFinishLastRefSet(const Value: TAwEventRef);
     function OnStartFerstGet: TAwEvent;
     procedure OnStartFerstSet(const Value: TAwEvent);
+
 
     // public
     // получить объект
@@ -179,7 +185,7 @@ type
     // пока счетчик >0 дайте пользователю подождать при закрытии программы
     // или
     // 1. отмените все анимации
-    // 2. не закрывайте прогрмму выполнив отмену закрытия
+    // 2. не закрывайте программу выполнив отмену закрытия
     // 3. сразу отправьте на форму postmessage
     // 4. примите postmessage а там уже закройте прогу
     // TForm.Release в некоторых случаях может помочь
@@ -197,7 +203,7 @@ type
     // или же установить для всех unit AmAnimated.AmAnimateDebugMode:=true
     property DebugMode: boolean read DebugModeGet write DebugModeSet;
 
-    // запуск и остновка
+    // старт стоп
     // ........................................
     property Active: boolean read ActiveGet;
     procedure Start;
@@ -222,8 +228,10 @@ type
     property OnFinish: TAwEvent read OnFinishGet write OnFinishSet;
     property OnStartFerst: TAwEvent read OnStartFerstGet write OnStartFerstSet;
     property OnFinishLast: TAwEvent read OnFinishLastGet write OnFinishLastSet;
+    property OnFinishLastRef: TAwEventRef read OnFinishLastRefGet write OnFinishLastRefSet;
     property OnProcess: TAwEvent read OnProcessGet write OnProcessSet;
     property OnDestroying: TAwEvent read OnDestroyingGet write OnDestroyingSet;
+
   end;
 {$ENDREGION}
   /// TAwLocExecutor базовый локальный исполнитель анимации  для внутреннего использования
@@ -250,7 +258,7 @@ type
     property Source: IAwSource read SourceGet;
   end;
 
-  TAwLocExecutor = class abstract(TAwObject, IAwAnimateBase, IAwLocExecutor)
+  TAwLocExecutor = class abstract(TAwObject, IAwAnimateBase, IAwAnimateIntf, IAwLocExecutor)
 {$REGION 'Bar'}
   type
 
@@ -313,7 +321,6 @@ type
     private
       FNow: Cardinal;
       FFirstTick, FNextTick, FLastTick: Int64;
-      FIntervalHeartBeat: Cardinal;
       FCommonTimePlayBack: Cardinal;
       function CommonTimePlayBackGet: Cardinal;
       procedure CommonTimePlayBackSet(const Value: Cardinal);
@@ -378,7 +385,7 @@ type
     FId: Cardinal;
     FName: string;
     [unsafe]FRunner: TObject; // TbwRunner;
-    [weak] FParentList: IAwLocQueue;
+    [weak] FParentQueue: IAwLocQueue;
     FBar: TBar;
     FActive: boolean;
     FPause: boolean;
@@ -396,6 +403,7 @@ type
     FOnFinish: TAwEvent;
     FOnStartFerst: TAwEvent;
     FOnFinishLast: TAwEvent;
+    FOnFinishLastRef: TAwEventRef;
     FOnProcess: TAwEvent;
     FOnDestryoing: TAwEvent;
 
@@ -435,6 +443,13 @@ type
     procedure OnStartSet(const Value: TAwEvent);
     function OnDestroyingGet: TAwEvent;
     procedure OnDestroyingSet(const Value: TAwEvent);
+    function OnFinishLastRefGet: TAwEventRef;
+    procedure OnFinishLastRefSet(const Value: TAwEventRef);
+    function IsDestroyingGet: boolean;
+    function OnFinishLastGet: TAwEvent;
+    procedure OnFinishLastSet(const Value: TAwEvent);
+    function OnStartFerstGet: TAwEvent;
+    procedure OnStartFerstSet(const Value: TAwEvent);
     function AsObjectGet: TAwAnimateBase;
 
     procedure CheckBar;
@@ -444,11 +459,6 @@ type
     function RunnerGet: TObject;
     procedure RunnerSet(const Value: TObject);
     function AsAnimateExecutorGet: IAwAnimateBase;
-    function IsDestroyingGet: boolean;
-    function OnFinishLastGet: TAwEvent;
-    procedure OnFinishLastSet(const Value: TAwEvent);
-    function OnStartFerstGet: TAwEvent;
-    procedure OnStartFerstSet(const Value: TAwEvent);
   protected
     property Runner: TObject read RunnerGet;
     procedure EventStartFerst; virtual;
@@ -457,12 +467,12 @@ type
     procedure EventStart; virtual;
     procedure EventProcess; virtual;
     procedure EventError(E: Exception); virtual;
-    procedure EventToList(isFinish: boolean);
+    procedure EventToParentQueue(isFinish: boolean);
     function IsValidParam: boolean; virtual;
     procedure SourceNotifyDestroy; virtual;
     procedure SourceChanged; virtual;
     procedure OptionReCreate(AClass: TAwOptionClass);
-    procedure OptionDestroyEvent;
+    procedure OptionDestroyEvent;//virtual;
   public
     constructor Create; virtual;
     destructor Destroy; override;
@@ -979,7 +989,7 @@ begin
   for I := 0 to length(Arr) - 1 do
   begin
     Value := IAwAnimateBase(Arr[I]);
-    Value.AsObject.FParentList := nil;
+    Value.AsObject.FParentQueue := nil;
     Value.Terminate;
   end;
   for I := 0 to length(Arr) - 1 do
@@ -999,7 +1009,7 @@ begin
   for I := 0 to FList.Count - 1 do
   begin
     Value := IAwAnimateBase(FList.List[I]);
-    Value.AsObject.FParentList := nil;
+    Value.AsObject.FParentQueue := nil;
   end;
 end;
 
@@ -1023,7 +1033,7 @@ begin
   else
     FList.Add(Value);
 
-  Value.AsObject.FParentList := Self;
+  Value.AsObject.FParentQueue := Self;
   Value._AddRef;
 end;
 
@@ -1454,7 +1464,7 @@ end;
 procedure TbwRunner.WaitFor(Value: IAwLocExecutor);
 begin
   if AwAnimateNotBlockingMode or not Value.AsAnimateExecutor.Blocking
-  or (Value.AsAnimateExecutor.AsObject.FParentList <> nil)
+  or (Value.AsAnimateExecutor.AsObject.FParentQueue <> nil)
   or not Assigned(TbwManager.ProcApplicationProcessMessage) then
    exit;
 
@@ -1832,7 +1842,6 @@ begin
   FFirstTick := 0;
   FNextTick := 0;
   FLastTick := 0;
-  FIntervalHeartBeat := 20;
   FCommonTimePlayBack := 0;
 end;
 
@@ -1863,7 +1872,7 @@ end;
 function TAwLocExecutor.TBarTick.IsValid: boolean;
 begin
   Result := (FLastTick > FFirstTick) and (FCommonTimePlayBack > 0) and
-    (FIntervalHeartBeat > 0);
+    (IntervalHeartBeat > 0);
 end;
 
 procedure TAwLocExecutor.TBarTick.UpdateNow;
@@ -1898,7 +1907,7 @@ begin
     FNextTick := 0;
     exit;
   end;
-  FNextTick := FNow + FIntervalHeartBeat;
+  FNextTick := FNow + IntervalHeartBeat;
 end;
 
 function TAwLocExecutor.TBarTick.CommonTimePlayBackGet: Cardinal;
@@ -1913,7 +1922,7 @@ end;
 
 function TAwLocExecutor.TBarTick.FrameCountGet: Cardinal;
 begin
-  Result := Cardinal(Ceil(FCommonTimePlayBack / FIntervalHeartBeat));
+  Result := Cardinal(Ceil(FCommonTimePlayBack / IntervalHeartBeat));
 end;
 
 function TAwLocExecutor.TBarTick.FrameIndexGet: Cardinal;
@@ -2034,7 +2043,7 @@ constructor TAwLocExecutor.Create;
 begin
   inherited;
   FTerminated := false;
-  FParentList := nil;
+  FParentQueue := nil;
   FStartOffset := 0;
   FIsWasTickRun := false;
   FId := TbwManager.AnimateNewId;
@@ -2049,6 +2058,7 @@ begin
   FIsDestroying := false;
   FSource := nil;
   FOption := nil;
+  FOnFinishLastRef:=nil;
   FDebugMode := false;
   OptionReCreate(OptionClassGet);
   inc(TbwManager.CountAnimatesCreated);
@@ -2069,6 +2079,7 @@ begin
   if FBar <> nil then
     FreeAndNil(FBar);
   FRunner := nil;
+  FOnFinishLastRef:=nil;
   dec(TbwManager.CountAnimatesCreated);
   dec(TbwManager.CountObjectsCreated);
   inherited;
@@ -2077,10 +2088,10 @@ end;
 procedure TAwLocExecutor.BeforeDestruction;
 begin
   FIsDestroying := true;
+  Terminate;
   if Assigned(FOnDestryoing) then
     FOnDestryoing(Self);
-  Terminate;
-  FParentList := nil;
+  FParentQueue := nil;
   inherited;
 end;
 
@@ -2194,7 +2205,8 @@ function TAwLocExecutor.EventRun: Cardinal;
 var
   I: Cardinal;
 begin
-  if not Active then
+
+  if not Active then // debug чекер что все верно работает
     raise Exception.CreateResFmt(@RsTAwLocExecutor_EventRun,[]);
 
   FBar.UpdateNow;
@@ -2228,7 +2240,6 @@ begin
     on E: Exception do
     begin
       EventError(E);
-      EventFinish;
       Cancel;
       raise;
     end;
@@ -2253,52 +2264,70 @@ begin
     end;
   end
   else if (FRepeatCount > 0) and (FRepeatIndex >= FRepeatCount - 1) then
-    EventToList(false);
+    EventToParentQueue(false);
 end;
 
 procedure TAwLocExecutor.EventError(E: Exception);
 begin
-  if Assigned(FParentList) then
-    FParentList.CancelAll;
+  if Assigned(FParentQueue) then
+    FParentQueue.CancelAll;
 end;
 
-procedure TAwLocExecutor.EventToList(isFinish: boolean);
-var AList: IAwLocQueue;
+procedure TAwLocExecutor.EventToParentQueue(isFinish: boolean);
+var AQueue: IAwLocQueue;
 begin
-  if Assigned(FParentList) then
+  if Assigned(FParentQueue) then
   begin
-    AList:=  FParentList;
-    AList.NotifyTick(Self, isFinish);
-    AList:=nil;
+    AQueue:=  FParentQueue;
+    AQueue.NotifyTick(Self, isFinish);
+    AQueue:=nil;
   end;
 end;
 
 procedure TAwLocExecutor.EventFinish;
 begin
+  if Assigned(FSource) and Assigned(FSource.Events) then
+    FSource.Events.EventFinish(self);
+
   if Assigned(FOnFinish) then
     FOnFinish(Self);
 end;
 
 procedure TAwLocExecutor.EventFinishLast;
 begin
+  if Assigned(FSource) and Assigned(FSource.Events) then
+    FSource.Events.EventFinishLast(self);
+
+  if Assigned(FOnFinishLastRef) then
+    FOnFinishLastRef(self);
+
   if Assigned(FOnFinishLast) then
     FOnFinishLast(Self);
 end;
 
 procedure TAwLocExecutor.EventProcess;
 begin
+  if Assigned(FSource) and Assigned(FSource.Events) then
+    FSource.Events.EventProcess(self);
+
   if Assigned(FOnProcess) then
     FOnProcess(Self);
 end;
 
 procedure TAwLocExecutor.EventStart;
 begin
+  if Assigned(FSource) and Assigned(FSource.Events) then
+    FSource.Events.EventStart(self);
+
   if Assigned(FOnStart) then
     FOnStart(Self);
 end;
 
 procedure TAwLocExecutor.EventStartFerst;
 begin
+  if Assigned(FSource) and Assigned(FSource.Events) then
+    FSource.Events.EventStartFerst(self);
+
   if Assigned(FOnStartFerst) then
     FOnStartFerst(Self);
 end;
@@ -2464,6 +2493,16 @@ begin
   FOnFinishLast := Value;
 end;
 
+function TAwLocExecutor.OnFinishLastRefGet: TAwEventRef;
+begin
+  Result:= FOnFinishLastRef;
+end;
+
+procedure TAwLocExecutor.OnFinishLastRefSet(const Value: TAwEventRef);
+begin
+ FOnFinishLastRef:= Value;
+end;
+
 procedure TAwLocExecutor.OnFinishSet(const Value: TAwEvent);
 begin
   FOnFinish := Value;
@@ -2567,7 +2606,7 @@ begin
     begin
       EventFinishLast;
       FBar.Deactivated;
-      EventToList(true);
+      EventToParentQueue(true);
       TbwManager.AnimateRemoveFromExcecute(Self)
     end;
   end;
@@ -2575,8 +2614,8 @@ end;
 
 function TAwLocExecutor.IsValidParam: boolean;
 begin
-  Result := not IsDestroying and FBar.Activated and not Pause and
-    not FTerminated and (Delay > 0);
+  Result := not IsDestroying and (FBar <> nil) and  FBar.Activated
+  and not Pause and not Terminated and (Delay > 0);
 end;
 
 { AmAnimateFactoryBase }
@@ -2734,7 +2773,8 @@ end;
 
 function TAwAnimateOpt.IsValidParam: boolean;
 begin
-  Result := inherited IsValidParam and (Option <> nil) and Option.IsValid;
+  Result := inherited IsValidParam
+  and (Option <> nil) and Option.IsValid;
 end;
 
 initialization
