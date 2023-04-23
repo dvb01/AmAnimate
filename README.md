@@ -1,24 +1,26 @@
 # AmAnimate
 Анимация для графики и контролов 
-Пока только Shake работает
+
 ```pascal
 
-  var Shake:IAwAnimateShake;
-  begin
+
   
-    //отмена предыдущих анимаций для этого контрола
-   AwFactoryEffects.SourceCancel(TAwSourceSimple.Create(AmComboBox1));
-   
+//отмена предыдущих анимаций для этого контрола
+ AwFactoryEffects.SourceCancel(TAwSourceSimple.Create(AmComboBox1));
+
+procedure TForm27.NewShakeSimple(C:TWinControl);
+var Shake:IAwAnimateShake;
+begin
    Shake:= AwFactoryEffects.Shake;
+   Shake.Name:= 'Shake '+C.Name;
    Shake.OnDestroying:=  AntDestroy;
    // быстрая установка параметров
-   Shake.SetParam(TAwSourceSimple.Create(AmComboBox1),3000,10,15,2.5,1.5);
+   Shake.SetParam(TAwSourceSimple.Create(C),5000,10,15,40.5,20.5);
    // расширенная
    Shake.Option.Effect.X.Effect.EffectSet(TAwEnumEffectMain(8),TAwEnumEffectMode(1));
    Shake.Option.Effect.Y.Effect.EffectSet(TAwEnumEffectMain(8),TAwEnumEffectMode(1));
    Shake.Start;
-   //...
- end;  
+end;
    
 procedure TForm27.NewBallSimple(C:TWinControl);
 var Ball:IAwAnimateBall;
@@ -65,6 +67,25 @@ begin
    Alfa.Option.Effect.Effect.EffectSet(TAwEnumEffectMain(1),TAwEnumEffectMode(1));
    Alfa.Start;
 end;   
+
+
+// очерель анимаций 
+procedure TForm27.PShake_QueueClick(Sender: TObject);
+var List:IAwQueue;
+var i:integer;
+C:TWinControl;
+begin
+    // перед добавлением нужно отменить все анимации для каждого контрола
+    List:=AwFactoryBase.NewList;
+    for I := 0 to ListShake.Count-1 do
+    begin
+       C:=ListShake.Items[i]; // берем 1 контрол
+       AwFactoryBase.SourceCancel(TAwSourceSimple.Create(C)); // отменяем
+       List.Add(NewShakeFastSimple(C),math.RandomRange(-150,10)); // добавляем в лист
+    end;
+   // List.RepeatCount:=1000;
+    List.Start; //запускаем
+end;
    
 ```
 ![Preview](/READMEFILES/1.gif "Фото Программы")
