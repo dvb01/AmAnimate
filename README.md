@@ -66,7 +66,52 @@ begin
    Alfa.SetParam(TAwSourceTesterWinApi.Create(C),1500,Delta);
    Alfa.Option.Effect.Effect.EffectSet(TAwEnumEffectMain(1),TAwEnumEffectMode(1));
    Alfa.Start;
-end;   
+end; 
+
+
+procedure TForm27.NewDcvCustomColorSimple(C:TWinControl);
+var Dcv:IAwAnimateDcvCustom;
+begin
+   Dcv:= AwFactoryEffects.DcvCustom;
+   Dcv.Name:= 'DcvCustom '+C.Name;
+   Dcv.OnDestroying:=  AntDestroy;
+   Dcv.Option.Source:= TAwSourceSimple.Create(C);
+   Dcv.Option.Delay:=10000;
+   Dcv.Option.Mode:= dcvSin;
+   Dcv.RepeatCount:=-1;
+   Dcv.OnDcvStartRef:=
+   procedure (const Animate: IAwAnimateDcv; const Table:IAwSourceDcvTable)
+    var ColorBegin,ColorEnd:TColor;
+    var H1,L1,S1,H2,L2,S2:integer;
+   begin
+      ColorBegin:=$0058DE49;
+      ColorEnd:=$00E14E46;
+      AmColorConvert2.ColorToHLS(ColorBegin,H1,L1,S1);
+      AmColorConvert2.ColorToHLS(ColorEnd,H2,L2,S2);
+      Table.Add('H',H1,H2);
+      Table.Add('L',L1,L2);
+      Table.Add('S',S1,S2);
+   end;
+   Dcv.OnDcvFinishRef :=
+   procedure (const Animate: IAwAnimateDcv; const Table:IAwSourceDcvTable)
+    var H,L,S:Double;
+    begin
+      Table.GetNowValue('H',H);
+      Table.GetNowValue('L',L);
+      Table.GetNowValue('S',S);
+      TLocWinControl(C).Color:= AmColorConvert2.HLSToColor(Round(H),Round(L),Round(S));
+    end;
+   Dcv.OnDcvProcessRef :=
+   procedure (const Animate: IAwAnimateDcv; const Table:IAwSourceDcvTable)
+    var H,L,S:Double;
+    begin
+      Table.GetNowValue('H',H);
+      Table.GetNowValue('L',L);
+      Table.GetNowValue('S',S);
+      TLocWinControl(C).Color:= AmColorConvert2.HLSToColor(Round(H),Round(L),Round(S));
+    end;
+   Dcv.Start;
+end;  
 
 
 // очерель анимаций 
@@ -89,6 +134,5 @@ end;
    
 ```
 ![Preview](/READMEFILES/1.gif "Фото Программы")
-![Preview](/READMEFILES/2.gif "Фото Программы")
 ![Preview](/READMEFILES/3.gif "Фото Программы")
 ![Preview](/READMEFILES/5.gif "Фото Программы")

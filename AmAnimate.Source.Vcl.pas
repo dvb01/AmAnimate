@@ -13,13 +13,14 @@ uses
   Vcl.Controls,
   Vcl.Forms,
   Vcl.Dialogs,
-  AmAnimate.Source.Intf,
-  AmAnimate.Engine,
+  AmGraphic.Help,
+  AmAnimate.Core.Main,
   AmControlClasses;
 
 
  type
-  TAwSourceSimple = class (TInterfacedObject,IAwSourceBounds,IAwSourceAlfa,IAwSource,IAwSourceEvent)
+ // тестовый класс поддерживающий все интерфейсы инимаций
+  TAwSourceSimple = class (TInterfacedObject,IAwSourceBounds,IAwSourceAlfa,IAwSource,IAwSourceEvent,IAwSourceDcv)
     private
      type
        TNotifer = class (TComponent)
@@ -50,6 +51,8 @@ uses
      procedure EventStart(const Sender:IAwAnimateIntf); virtual;
      procedure EventFinish(const Sender:IAwAnimateIntf);virtual;
      procedure EventProcess(const Sender:IAwAnimateIntf);virtual;
+     procedure EventActivated( const Sender:IAwAnimateIntf); virtual;
+     procedure EventDeactivated( const Sender:IAwAnimateIntf); virtual;
 
      //IAwSourceBounds
      function GetBounds(var Rect:TRectF):boolean;   virtual;
@@ -58,11 +61,21 @@ uses
      //IAwSourceAlfa
      function GetAlfa(var Value:byte): boolean;
      function SetAlfa(const Value:byte):boolean;
+
+     //IAwSourceDcv
+     // инициализуем переменные анимация стартует
+     function DcvStart( const Table:IAwSourceDcvTable):boolean; virtual;
+     // получаем промежуточное значение
+     function DcvProcess( const Table:IAwSourceDcvTable):boolean; virtual;
+     // анимация закончена
+     function DcvFinish( const Table:IAwSourceDcvTable):boolean; virtual;
     public
      property Control: TWinControl read FControl;
      constructor Create(AControl:TWinControl);
      destructor Destroy;override;
   end;
+
+
 
 
 
@@ -141,6 +154,8 @@ begin
      FControl:=nil;
 end;
 
+
+
 destructor TAwSourceSimple.Destroy;
 begin
   FEventBroadcastDestroy.Invoke;
@@ -163,6 +178,21 @@ begin
     if not Result then
      exit;
     Value:=  FControl.HelpTransparentLevel;
+end;
+
+function TAwSourceSimple.DcvFinish( const Table: IAwSourceDcvTable): boolean;
+begin
+   Result:=IsValid;
+end;
+
+function TAwSourceSimple.DcvProcess( const Table: IAwSourceDcvTable): boolean;
+begin
+  Result:=IsValid;
+end;
+
+function TAwSourceSimple.DcvStart( const Table: IAwSourceDcvTable): boolean;
+begin
+  Result:=IsValid;
 end;
 
 function TAwSourceSimple.SetAlfa(const Value: byte): boolean;
@@ -233,6 +263,16 @@ end;
 
 procedure TAwSourceSimple.EventStart(const Sender: IAwAnimateIntf);
 begin
+end;
+
+procedure TAwSourceSimple.EventActivated(const Sender: IAwAnimateIntf);
+begin
+
+end;
+
+procedure TAwSourceSimple.EventDeactivated(const Sender: IAwAnimateIntf);
+begin
+
 end;
 
 procedure TAwSourceSimple.EventFinish(const Sender: IAwAnimateIntf);
@@ -429,13 +469,14 @@ end;
 
 
 type
- LocAwFactoryBase = class (AwFactoryBase)end;
+ LocAwFactoryEffects = class (AwFactoryEffects)end;
 
 
 
 initialization
- LocAwFactoryBase.ProcApplicationProcessMessage:=Application.ProcessMessages;
+ if Application <> nil then  
+ LocAwFactoryEffects.ProcApplicationProcessMessage:=Application.ProcessMessages;
 finalization
-  LocAwFactoryBase.ProcApplicationProcessMessage:=nil;
+  LocAwFactoryEffects.ProcApplicationProcessMessage:=nil;
 
 end.
